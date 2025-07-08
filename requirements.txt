@@ -5,5 +5,4 @@ seaborn
 matplotlib
 scikit-learn
 openpyxl
-tensorflow==2.13.0
-libgl1-mesa-glx
+tensorflow
