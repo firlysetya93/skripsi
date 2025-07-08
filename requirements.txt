@@ -4,3 +4,5 @@ numpy
 seaborn
 matplotlib
 scikit-learn
+openpyxl
+tensorflow
