@@ -5,4 +5,4 @@ seaborn
 matplotlib
 scikit-learn
 openpyxl
-tensorflow
+tensorflow==2.13.0
