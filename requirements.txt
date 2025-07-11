@@ -1,7 +1,8 @@
 streamlit
 pandas
 numpy
-seaborn
 matplotlib
-scikit-learn
+seaborn
 openpyxl
+scikit-learn
+tensorflow
