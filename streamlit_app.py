@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import io
+
 
 # Konfigurasi halaman
 st.set_page_config(page_title="Pipeline Analisis Data Angin", layout="wide")
@@ -25,11 +27,11 @@ if uploaded_file is not None:
     st.dataframe(df.head())
 
     # Informasi struktur dataset
-    st.subheader("📋 Struktur Dataset")
-    buffer = []
+    buffer = io.StringIO()
     df.info(buf=buffer)
-    s = "\n".join(buffer)
-    st.text(s)
+    info_str = buffer.getvalue()
+    st.text(info_str)
+
 
     # Statistik deskriptif
     st.subheader("📈 Statistik Deskriptif")
