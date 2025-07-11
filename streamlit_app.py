@@ -4,28 +4,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Judul aplikasi
-st.set_page_config(page_title="Wind Speed Data App", layout="wide")
-st.title("📊 Aplikasi Analisis Data Kecepatan Angin")
+# Konfigurasi halaman
+st.set_page_config(page_title="Pipeline Analisis Data Angin", layout="wide")
+st.title("🌪️ Prediksi Data Kecepatan Angin")
 
 # Upload file
-uploaded_file = st.file_uploader("Silakan unggah file Excel Anda (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("📤 Unggah file Excel Anda (.xlsx)", type=["xlsx"])
 
 if uploaded_file is not None:
-    # Baca data
+    # Load data
     try:
         df = pd.read_excel(uploaded_file)
-        st.success("File berhasil dibaca!")
+        st.success("✅ File berhasil dibaca!")
     except Exception as e:
-        st.error(f"Terjadi kesalahan saat membaca file: {e}")
+        st.error(f"❌ Terjadi kesalahan saat membaca file: {e}")
         st.stop()
 
-    # Tampilkan 5 data awal
+    # Tampilkan data awal
     st.subheader("🔍 Data Awal")
     st.dataframe(df.head())
 
-    # Informasi dataset
-    st.subheader("📋 Informasi Dataset")
+    # Informasi struktur dataset
+    st.subheader("📋 Struktur Dataset")
     buffer = []
     df.info(buf=buffer)
     s = "\n".join(buffer)
@@ -35,22 +35,47 @@ if uploaded_file is not None:
     st.subheader("📈 Statistik Deskriptif")
     st.dataframe(df.describe())
 
-    # Cek missing values
-    st.subheader("⚠️ Missing Values")
-    missing = df.isnull().sum()
-    missing = missing[missing > 0]
-    if not missing.empty:
-        st.dataframe(missing)
-    else:
-        st.success("Tidak ada missing values!")
+    # ============================
+    # 🔍 Missing Value Analysis
+    # ============================
+    st.subheader("⚠️ Analisis Missing Values")
 
-    # Visualisasi variabel numerik
+    missing_values = df.isnull().sum()
+    missing_values = missing_values[missing_values > 0]
+
+    if not missing_values.empty:
+        st.write("Kolom yang memiliki missing values:")
+        st.dataframe(missing_values)
+
+        if 'FF_X' in df.columns:
+            rows_with_missing_ffx = df[df['FF_X'].isnull()]
+            if not rows_with_missing_ffx.empty:
+                st.markdown("#### 🔎 Baris dengan nilai hilang di kolom `FF_X`")
+                st.dataframe(rows_with_missing_ffx)
+            else:
+                st.success("Tidak ada nilai hilang di kolom `FF_X`.")
+        else:
+            st.warning("⚠️ Kolom `FF_X` tidak ditemukan.")
+    else:
+        st.success("🎉 Tidak ada missing values dalam dataset!")
+
+    # ============================
+    # 🧹 Tombol untuk hapus missing
+    # ============================
+    if st.button("🧹 Hapus semua baris dengan missing values"):
+        df = df.dropna()
+        st.success("Baris dengan missing values telah dihapus.")
+        st.dataframe(df.head())
+
+    # ============================
+    # 📊 Visualisasi kolom numerik
+    # ============================
+    st.subheader("📉 Visualisasi Kolom Numerik")
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
     if numeric_cols:
-        st.subheader("📉 Visualisasi Garis")
-        selected_col = st.selectbox("Pilih kolom numerik untuk divisualisasikan:", numeric_cols)
+        selected_col = st.selectbox("Pilih kolom untuk visualisasi:", numeric_cols)
         st.line_chart(df[selected_col])
     else:
-        st.warning("Tidak ditemukan kolom numerik untuk divisualisasikan.")
+        st.warning("Tidak ada kolom numerik tersedia.")
 else:
-    st.warning("Silakan upload file Excel terlebih dahulu (.xlsx)")
+    st.info("💡 Silakan upload file Excel terlebih dahulu untuk memulai.")
