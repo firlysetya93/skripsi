@@ -4,22 +4,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Set judul halaman
-st.set_page_config(page_title="Data Eksplorasi - Skripsi", layout="wide")
-
-st.title("📊 Eksplorasi Data Awal - Wind Speed Prediction")
+# Judul aplikasi
+st.set_page_config(page_title="Wind Speed Data App", layout="wide")
+st.title("📊 Aplikasi Analisis Data Kecepatan Angin")
 
 # Upload file
-uploaded_file = st.file_uploader("Unggah file Excel", type=["xlsx"])
-if uploaded_file is not None:
-    # Load data
-    df = pd.read_excel(uploaded_file)
+uploaded_file = st.file_uploader("Silakan unggah file Excel Anda (.xlsx)", type=["xlsx"])
 
-    # Tampilkan data awal
-    st.subheader("🧾 Tampilkan 5 Data Teratas")
+if uploaded_file is not None:
+    # Baca data
+    try:
+        df = pd.read_excel(uploaded_file)
+        st.success("File berhasil dibaca!")
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat membaca file: {e}")
+        st.stop()
+
+    # Tampilkan 5 data awal
+    st.subheader("🔍 Data Awal")
     st.dataframe(df.head())
 
-    # Info struktur data
+    # Informasi dataset
     st.subheader("📋 Informasi Dataset")
     buffer = []
     df.info(buf=buffer)
@@ -31,18 +36,21 @@ if uploaded_file is not None:
     st.dataframe(df.describe())
 
     # Cek missing values
-    st.subheader("🔍 Missing Values")
+    st.subheader("⚠️ Missing Values")
     missing = df.isnull().sum()
-    st.dataframe(missing[missing > 0])
+    missing = missing[missing > 0]
+    if not missing.empty:
+        st.dataframe(missing)
+    else:
+        st.success("Tidak ada missing values!")
 
-    # Pilih kolom numerik untuk visualisasi
+    # Visualisasi variabel numerik
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
     if numeric_cols:
-        st.subheader("📉 Visualisasi Garis Variabel Numerik")
-        col_to_plot = st.selectbox("Pilih kolom:", numeric_cols)
-        st.line_chart(df[col_to_plot])
+        st.subheader("📉 Visualisasi Garis")
+        selected_col = st.selectbox("Pilih kolom numerik untuk divisualisasikan:", numeric_cols)
+        st.line_chart(df[selected_col])
     else:
-        st.warning("Tidak ada kolom numerik yang tersedia untuk divisualisasikan.")
+        st.warning("Tidak ditemukan kolom numerik untuk divisualisasikan.")
 else:
-    st.info("Silakan unggah file Excel terlebih dahulu.")
-
+    st.warning("Silakan upload file Excel terlebih dahulu (.xlsx)")
