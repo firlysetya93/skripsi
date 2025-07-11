@@ -3,49 +3,46 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
-import random
-import tensorflow as tf
 
-from sklearn.preprocessing import MinMaxScaler, LabelEncoder, OneHotEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout, Activation
-from math import sqrt
+# Set judul halaman
+st.set_page_config(page_title="Data Eksplorasi - Skripsi", layout="wide")
 
-# ========== Set Seed ==========
-seed_value = 42
-os.environ['PYTHONHASHSEED'] = str(seed_value)
-random.seed(seed_value)
-np.random.seed(seed_value)
-tf.random.set_seed(seed_value)
+st.title("📊 Eksplorasi Data Awal - Wind Speed Prediction")
 
-# ========== UI ==========
-st.title("Analisis dan Prediksi dengan LSTM")
-st.write("Aplikasi ini memuat data dan menampilkan informasi awal termasuk missing value.")
-
-# ========== Upload File ==========
-uploaded_file = st.file_uploader("Upload file Excel (.xlsx)", type=["xlsx"])
+# Upload file
+uploaded_file = st.file_uploader("Unggah file Excel", type=["xlsx"])
 if uploaded_file is not None:
-    # Load dataset
+    # Load data
     df = pd.read_excel(uploaded_file)
-    
-    st.subheader("Data Preview")
+
+    # Tampilkan data awal
+    st.subheader("🧾 Tampilkan 5 Data Teratas")
     st.dataframe(df.head())
 
-    # Cek missing value
-    st.subheader("Cek Missing Value")
-    missing_info = df.isnull().sum()
-    missing_info = missing_info[missing_info > 0]
-    if not missing_info.empty:
-        st.write("Kolom dengan missing value:")
-        st.dataframe(missing_info)
-    else:
-        st.success("Tidak ada missing value dalam dataset.")
+    # Info struktur data
+    st.subheader("📋 Informasi Dataset")
+    buffer = []
+    df.info(buf=buffer)
+    s = "\n".join(buffer)
+    st.text(s)
 
-    # Optional: tampilkan deskripsi statistik
-    if st.checkbox("Tampilkan Statistik Deskriptif"):
-        st.write(df.describe())
+    # Statistik deskriptif
+    st.subheader("📈 Statistik Deskriptif")
+    st.dataframe(df.describe())
+
+    # Cek missing values
+    st.subheader("🔍 Missing Values")
+    missing = df.isnull().sum()
+    st.dataframe(missing[missing > 0])
+
+    # Pilih kolom numerik untuk visualisasi
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+    if numeric_cols:
+        st.subheader("📉 Visualisasi Garis Variabel Numerik")
+        col_to_plot = st.selectbox("Pilih kolom:", numeric_cols)
+        st.line_chart(df[col_to_plot])
+    else:
+        st.warning("Tidak ada kolom numerik yang tersedia untuk divisualisasikan.")
 else:
-    st.warning("Silakan upload file Excel terlebih dahulu.")
+    st.info("Silakan unggah file Excel terlebih dahulu.")
+
