@@ -237,71 +237,89 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         st.write("📐 Shape y_test :", y_test.shape)
 
         # ------------------------- MODEL LSTM -------------------------
-        st.subheader("🧠 Arsitektur Model LSTM")
 
-        model1 = Sequential()
-        model1.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-        model1.add(Dropout(0.3))
-        model1.add(LSTM(10, return_sequences=False))
-        model1.add(Dropout(0.3))
-        model1.add(Flatten())
-        model1.add(Dense(64, activation="relu"))
-        model1.add(Dense(16, activation="relu"))
-        model1.add(Dense(n_features))
+st.title("🧠 Pelatihan Model LSTM (2 Arsitektur)")
 
-        optimizer = Adam(learning_rate=0.001)
-        model1.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
+# Pastikan data tersedia di session_state
+if "X_train" in st.session_state and "y_train" in st.session_state:
+    X_train = st.session_state.X_train
+    X_test = st.session_state.X_test
+    y_train = st.session_state.y_train
+    y_test = st.session_state.y_test
+    n_features = X_train.shape[2]
 
-        # Tampilkan summary
-        with st.expander("📋 LSTM Model Summary"):
-            st.text(model1.summary())
-            # ------------------------- TRAINING DENGAN CALLBACK -------------------------
-        st.subheader("🏋️ Training dengan Scheduler & Checkpoint")
+    def scheduler(epoch, lr):
+        return lr if epoch < 10 else float(lr * tf.math.exp(-0.1 * (epoch - 9)))
 
-        def train_model_streamlit(model, X_train, y_train, X_test, y_test,
-                                  learning_rate=0.001, batch_size=32, epochs=50,
-                                  patience=5, filepath='best_model.h5'):
-            # Scheduler untuk learning rate
-            def scheduler(epoch, lr):
-                if epoch < 10:
-                    return lr
-                else:
-                    return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
+    def train_model(model, name="Model", lr=0.001, batch_size=32, epochs=50, patience=5, filepath='model.h5'):
+        lr_scheduler = LearningRateScheduler(scheduler)
+        early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+        checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
 
-            lr_scheduler = LearningRateScheduler(scheduler)
-            early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-            checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
+        with st.spinner(f"⏳ Training {name}..."):
+            history = model.fit(X_train, y_train,
+                                epochs=epochs,
+                                batch_size=batch_size,
+                                validation_data=(X_test, y_test),
+                                callbacks=[lr_scheduler, early_stopping, checkpointer],
+                                verbose=0,
+                                shuffle=False)
 
-            # Training
-            with st.spinner("⏳ Model sedang dilatih..."):
-                history = model.fit(X_train, y_train,
-                                    epochs=epochs,
-                                    batch_size=batch_size,
-                                    validation_data=(X_test, y_test),
-                                    callbacks=[lr_scheduler, early_stopping, checkpointer],
-                                    verbose=0,
-                                    shuffle=False)
+        st.success(f"✅ {name} selesai dilatih!")
+        loss, mae = model.evaluate(X_test, y_test, verbose=0)
+        st.metric(f"{name} - MSE", f"{loss:.5f}")
+        st.metric(f"{name} - MAE", f"{mae:.5f}")
 
-            st.success("✅ Training selesai!")
+        fig, ax = plt.subplots()
+        ax.plot(history.history['loss'], label='Training Loss')
+        ax.plot(history.history['val_loss'], label='Validation Loss')
+        ax.set_title(f"{name} - Training History")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.legend()
+        st.pyplot(fig)
 
-            # Evaluasi
-            loss, mae = model.evaluate(X_test, y_test, verbose=0)
-            st.metric("MSE (Test Loss)", f"{loss:.5f}")
-            st.metric("MAE (Test MAE)", f"{mae:.5f}")
+        return history, loss
 
-            # Plot history
-            fig, ax = plt.subplots()
-            ax.plot(history.history['loss'], label='Training Loss')
-            ax.plot(history.history['val_loss'], label='Validation Loss')
-            ax.set_xlabel('Epoch')
-            ax.set_ylabel('Loss')
-            ax.set_title('Training History')
-            ax.legend()
-            st.pyplot(fig)
+    # ========== MODEL 1 ==========
+    st.subheader("🔹 Model 1 - LSTM Sederhana")
+    model1 = Sequential()
+    model1.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+    model1.add(Dropout(0.3))
+    model1.add(LSTM(10, return_sequences=False))
+    model1.add(Dropout(0.3))
+    model1.add(Flatten())
+    model1.add(Dense(64, activation="relu"))
+    model1.add(Dense(16, activation="relu"))
+    model1.add(Dense(n_features))
+    model1.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
 
-            return history, loss
+    with st.expander("📋 Ringkasan Model 1"):
+        model1.summary(print_fn=lambda x: st.text(x))
 
-        # Tombol untuk mulai training
-        if st.button("🚀 Mulai Training (dengan Scheduler & Checkpoint)"):
-            history1, test_loss1 = train_model_streamlit(model1, X_train, y_train, X_test, y_test)
-            st.session_state.history1 = history1
+    if st.button("🚀 Latih Model 1"):
+        history1, loss1 = train_model(model1, name="Model 1", lr=0.001, filepath="best_model1.h5")
+        st.session_state.model1 = model1
+        st.session_state.history1 = history1
+
+    # ========== MODEL 2 ==========
+    st.subheader("🔹 Model 2 - LSTM Deep")
+    model2 = Sequential()
+    model2.add(LSTM(200, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+    model2.add(Dropout(0.1))
+    model2.add(LSTM(100, return_sequences=False))
+    model2.add(Dropout(0.1))
+    model2.add(Dense(64, activation="relu"))
+    model2.add(Dense(n_features))
+    model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
+
+    with st.expander("📋 Ringkasan Model 2"):
+        model2.summary(print_fn=lambda x: st.text(x))
+
+    if st.button("🚀 Latih Model 2"):
+        history2, loss2 = train_model(model2, name="Model 2", lr=0.0001, filepath="best_model2.h5")
+        st.session_state.model2 = model2
+        st.session_state.history2 = history2
+
+else:
+    st.warning("❗ Data belum tersedia. Lakukan preprocessing dan pembuatan fitur terlebih dahulu.")
