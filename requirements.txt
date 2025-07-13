@@ -6,4 +6,3 @@ seaborn
 scikit-learn
 statsmodels
 openpyxl
-tensorflow-cpu==2.12.0
