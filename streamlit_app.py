@@ -73,63 +73,69 @@ elif menu == "📊 EDA":
         if num_cols:
             selected = st.selectbox("Pilih kolom:", num_cols)
             st.line_chart(df[selected])
-    else:
-        st.warning("❗ Silakan upload file terlebih dahulu.")
 
-# ========== Preprocessing ==========
-elif menu == "⚙️ Preprocessing":
-    st.title("⚙️ Preprocessing Data")
-    if df is not None:
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
-        df['Bulan'] = df['TANGGAL'].dt.month
+        st.subheader("📉 ACF & PACF")
+        if 'TANGGAL' in df.columns and 'FF_X' in df.columns:
+            df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
+            df.set_index('TANGGAL', inplace=True)
+            ts = df['FF_X'].dropna()
+            fig, axes = plt.subplots(3, 1, figsize=(14, 10))
+            plot_acf(ts, lags=50, ax=axes[0])
+            axes[0].set_title("Autocorrelation Function (ACF)")
+            plot_pacf(ts, lags=50, ax=axes[1], method='ywm')
+            axes[1].set_title("Partial Autocorrelation Function (PACF)")
+            axes[2].plot(ts)
+            axes[2].set_title("Time Series Plot")
+            st.pyplot(fig)
 
-        def determine_season(m):
-            if m in [12, 1, 2]: return 'HUJAN'
-            elif m in [3, 4, 5]: return 'PANCAROBA I'
-            elif m in [6, 7, 8]: return 'KEMARAU'
-            else: return 'PANCAROBA II'
+            st.markdown("""
+**Interpretasi Visualisasi:**
 
-        df['Musim'] = df['Bulan'].apply(determine_season)
-        st.success("✅ Kolom Bulan & Musim berhasil ditambahkan.")
-        st.dataframe(df[['TANGGAL', 'Bulan', 'Musim']].head())
+- **ACF (Autocorrelation Function):**
+  Menunjukkan korelasi antara nilai saat ini dengan nilai sebelumnya (lag). Pola ACF membantu dalam mengidentifikasi komponen MA (Moving Average) pada data.
 
-        st.subheader("🔍 Missing Value Sebelum Penanganan")
-        st.dataframe(df.isnull().sum()[df.isnull().sum() > 0])
+- **PACF (Partial Autocorrelation Function):**
+  Menunjukkan korelasi langsung antara nilai sekarang dan nilai lag-n, setelah menghilangkan pengaruh dari lag-lag di antaranya. Pola PACF bermanfaat untuk menentukan komponen AR (AutoRegressive).
 
-        def fill_missing_values(group):
-            group['FF_X'] = group['FF_X'].fillna(group['FF_X'].mean())
-            return group
+- **Time Series Plot:**
+  Menampilkan pola keseluruhan data kecepatan angin dari waktu ke waktu. Dapat digunakan untuk melihat tren dan musiman.
 
-        df_filled = df.groupby('Musim').apply(fill_missing_values)
-        df_filled.reset_index(drop=True, inplace=True)
-
-        df_selected = df_filled[['TANGGAL', 'FF_X', 'Musim']].set_index('TANGGAL')
-        dfs = {s: g.reset_index() for s, g in df_selected.groupby('Musim')}
-        df_musim = pd.concat(dfs.values(), ignore_index=True)
-
-        st.session_state.df_musim = df_musim
-        st.success("✅ Missing value berhasil diisi berdasarkan musim.")
-        st.dataframe(df_musim.head())
-    else:
-        st.warning("❗ Silakan upload file terlebih dahulu.")
-
-# ========== Modeling ==========
-elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
-    st.title("🧠 Modeling dengan LSTM / TCN / RBFNN")
-    st.info("Modul modeling belum diisi. Silakan tentukan parameter dan pelatihan di sini.")
-    st.markdown("""
-Kamu bisa menambahkan:
-- Pelatihan per musim
-- Visualisasi hasil training
-- Evaluasi MAE / RMSE / R²
+💡 Jika ACF/PACF menunjukkan puncak berulang secara berkala, itu menandakan adanya pola musiman.
 """)
 
-# ========== Prediction ==========
-elif menu == "📈 Prediction":
-    st.title("📈 Prediksi Kecepatan Angin")
-    st.info("Modul prediksi belum diisi. Di sini kamu bisa input data dan menampilkan hasil prediksi.")
-    st.markdown("""
-- Masukkan data input prediksi
-- Load model terlatih (jika ada)
-- Tampilkan hasil prediksi vs aktual
+        st.subheader("📉 Seasonal Decomposition")
+        if 'FF_X' in df.columns:
+            ts = df['FF_X'].dropna()
+            result = seasonal_decompose(ts, model='additive', period=30)
+            fig, axes = plt.subplots(4, 1, figsize=(16, 12))
+            axes[0].plot(result.observed)
+            axes[0].set_title("Observed")
+            axes[1].plot(result.trend)
+            axes[1].set_title("Trend")
+            axes[2].plot(result.seasonal)
+            axes[2].set_title("Seasonal")
+            axes[3].plot(result.resid)
+            axes[3].set_title("Residual")
+            st.pyplot(fig)
+            st.markdown("""
+**Penjelasan Komponen Dekomposisi:**
+
+- **Observed:** Data asli gabungan antara tren, musiman, dan noise.
+- **Trend:** Menunjukkan kecenderungan jangka panjang (naik atau turun).
+- **Seasonal:** Menggambarkan fluktuasi musiman berulang, misalnya bulanan atau musiman.
+- **Residual:** Sisa dari data setelah tren dan musiman dihilangkan (noise).
 """)
+
+        st.subheader("📈 Uji Stasioneritas (ADF)")
+        result = adfuller(ts, autolag='AIC')
+        st.write(f"ADF Statistic : {result[0]:.4f}")
+        st.write(f"p-value       : {result[1]:.4f}")
+        st.write("Critical Values:")
+        for key, value in result[4].items():
+            st.write(f"   {key} : {value:.4f}")
+        if result[1] <= 0.05:
+            st.success("✅ Data stasioner (tolak H0): Pola statistik tetap sepanjang waktu")
+        else:
+            st.warning("⚠️ Data tidak stasioner (gagal tolak H0): Pola statistik berubah sepanjang waktu")
+    else:
+        st.warning("❗ Silakan upload file terlebih dahulu.")
