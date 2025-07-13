@@ -201,7 +201,8 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
 
         # Simpan ke session state jika ingin digunakan selanjutnya
         st.session_state.reframed = reframed
-
+    else:
+    st.warning("❗ Silakan upload file terlebih dahulu.")
     else:
         st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
 
