@@ -1,7 +1,8 @@
 streamlit
+tensorflow
 pandas
 numpy
-matplotlib
-seaborn
 openpyxl
 scikit-learn
+matplotlib
+keras-tcn
