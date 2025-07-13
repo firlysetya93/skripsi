@@ -392,7 +392,11 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
                 history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
                 st.session_state.model2 = model2
 
-    # Plot untuk masing-masing fitur
+    if 'features' in st.session_state:
+        features = st.session_state.features
+    else:
+        features = ['FF_X']  # fallback kalau belum disimpan di session_state
+    
     for i in range(len(features)):
         fig, ax = plt.subplots(figsize=(20, 6))
         ax.plot(y_test_inv[:, i], label='Actual')
