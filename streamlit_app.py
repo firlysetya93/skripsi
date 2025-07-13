@@ -20,55 +20,109 @@ if uploaded_file is not None:
         st.error(f"❌ Terjadi kesalahan saat membaca file: {e}")
         st.stop()
 
-    # Tampilkan data awal
+    # ============================
+    # 🔍 Data Awal
+    # ============================
     st.subheader("🔍 Data Awal")
     st.dataframe(df.head())
 
-    # Struktur Dataset
+    # ============================
+    # 📋 Struktur Dataset
+    # ============================
     st.subheader("📋 Struktur Dataset (`df.info()`)")
     buffer = io.StringIO()
     df.info(buf=buffer)
     info_str = buffer.getvalue()
     st.text(info_str)
 
-    # Statistik Deskriptif
-    st.subheader("📈 Statistik Deskriptif")
+    # ============================
+    # 📈 Statistik Deskriptif
+    # ============================
+    st.subheader("📊 Statistik Deskriptif")
     st.dataframe(df.describe())
 
-    # Analisis Missing Values
-    st.subheader("⚠️ Analisis Missing Values")
-    missing = df.isnull().sum()
-    missing = missing[missing > 0]
+    # ============================
+    # 🗓️ Tambahkan Kolom Bulan & Musim
+    # ============================
+    st.subheader("📆 Menambahkan Kolom Bulan dan Musim")
+    df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
+    df['Bulan'] = df['TANGGAL'].dt.month
 
-    if not missing.empty:
-        st.write("Kolom yang memiliki nilai hilang:")
-        st.dataframe(missing)
+    def determine_season(month):
+        if month in [12, 1, 2]:
+            return 'HUJAN'
+        elif month in [3, 4, 5]:
+            return 'PANCAROBA I'
+        elif month in [6, 7, 8]:
+            return 'KEMARAU'
+        elif month in [9, 10, 11]:
+            return 'PANCAROBA II'
 
-        # Tampilkan baris yang hilang pada kolom FF_X jika ada
-        if 'FF_X' in df.columns:
-            rows_with_missing_ffx = df[df['FF_X'].isnull()]
-            if not rows_with_missing_ffx.empty:
-                st.markdown("#### 🔎 Baris dengan nilai hilang di kolom `FF_X`")
-                st.dataframe(rows_with_missing_ffx)
-            else:
-                st.success("Kolom `FF_X` tidak memiliki nilai yang hilang.")
+    df['Musim'] = df['Bulan'].apply(determine_season)
+    st.dataframe(df[['TANGGAL', 'Bulan', 'Musim']].head())
+
+    # ============================
+    # 📊 Statistik FF_X per Musim
+    # ============================
+    st.subheader("📈 Statistik `FF_X` per Musim")
+    grouped = df.groupby('Musim')['FF_X'].agg(['mean', 'max', 'min']).reset_index()
+    st.dataframe(grouped)
+
+    # ============================
+    # ⚠️ Analisis Missing Value
+    # ============================
+    st.subheader("🔍 Missing Value Berdasarkan Musim")
+    missing_rows = df[df.isnull().any(axis=1)]
+
+    if missing_rows.empty:
+        st.success("✅ Tidak ada missing values dalam dataset.")
     else:
-        st.success("🎉 Tidak ada missing values dalam dataset!")
+        missing_by_group = missing_rows.groupby('Musim')
+        for group, rows in missing_by_group:
+            st.markdown(f"**Musim `{group}` memiliki {len(rows)} baris dengan missing value:**")
+            st.dataframe(rows)
 
-    # Tombol hapus missing
-    if st.button("🧹 Hapus semua baris yang memiliki missing values"):
-        df = df.dropna()
-        st.success("Baris yang mengandung missing values telah dihapus.")
-        st.dataframe(df.head())
+    # ============================
+    # 🧼 Handling Missing per Musim
+    # ============================
+    st.subheader("🧹 Penanganan Missing Value Berdasarkan Rata-Rata Musim")
 
-    # Visualisasi Garis
+    def fill_missing_values(group):
+        group['FF_X'] = group['FF_X'].fillna(group['FF_X'].mean())
+        return group
+
+    df_filled = df.groupby('Musim').apply(fill_missing_values)
+    df_filled.reset_index(drop=True, inplace=True)
+
+    st.write("✅ Dataset setelah missing value ditangani:")
+    st.dataframe(df_filled.head())
+
+    # Cek ulang sisa missing
+    remaining_missing = df_filled.isnull().sum()
+    st.write("🔍 Sisa missing values setelah penanganan:")
+    st.dataframe(remaining_missing[remaining_missing > 0])
+
+    # Penjelasan edukatif
+    st.markdown("### ℹ️ Mengapa Missing Value Diisi Per Musim?")
+    st.markdown("""
+Penanganan missing value dilakukan **berdasarkan musim**, karena:
+
+- Kecepatan angin (`FF_X`) dipengaruhi oleh faktor musiman seperti hujan, pancaroba, atau kemarau.
+- Rata-rata `FF_X` di musim kemarau bisa sangat berbeda dengan musim hujan.
+- Jika kita isi missing value dengan rata-rata global, data bisa bias dan analisis jadi menyesatkan.
+
+🧠 Dengan mengisi berdasarkan **rata-rata per musim**, kita menjaga konteks dan pola musiman tetap terjaga.
+""")
+
+    # ============================
+    # 📉 Visualisasi Kolom Numerik
+    # ============================
     st.subheader("📉 Visualisasi Perubahan Kolom Numerik")
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
     if numeric_cols:
         selected_col = st.selectbox("Pilih kolom numerik:", numeric_cols)
         st.line_chart(df[selected_col])
 
-        # Penjelasan visualisasi
         st.markdown("### ℹ️ Penjelasan Visualisasi")
         st.markdown(f"""
 Visualisasi di atas menunjukkan **perubahan nilai `{selected_col}` dari waktu ke waktu**.
@@ -80,7 +134,6 @@ Visualisasi di atas menunjukkan **perubahan nilai `{selected_col}` dari waktu ke
 📌 **Contoh**: Jika kolom `{selected_col}` adalah `FF_X`, maka:
 - Lonjakan → kemungkinan angin kencang
 - Stabil → periode tenang
-
 """)
     else:
         st.warning("Tidak ada kolom numerik untuk divisualisasikan.")
