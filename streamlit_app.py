@@ -350,12 +350,6 @@ elif menu == "🔧 Hyperparameter Tuning":
         if st.button("🚀 Mulai Tuning Hyperparameter"):
             with st.spinner("⏳ Sedang melakukan tuning..."):
 
-                import optuna
-                from tensorflow.keras.models import Sequential
-                from tensorflow.keras.layers import LSTM, Dense, Dropout
-                from tensorflow.keras.optimizers import Adam
-                from tensorflow.keras.callbacks import EarlyStopping
-
                 def objective(trial):
                     lstm_units = trial.suggest_int('lstm_units', 10, 200)
                     dense_units = trial.suggest_int('dense_units', 10, 200)
