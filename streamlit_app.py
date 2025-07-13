@@ -10,16 +10,17 @@ from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
+
 st.set_page_config(page_title="🌪️ Aplikasi Prediksi Kecepatan Angin", layout="wide")
 
 # Sidebar
-menu = st.sidebar.selectbox("📂 Menu", [
+menu = st.sidebar.selectbox("Navigasi Menu", [
+    "🏠 Home",
+    "📤 Upload Data",
+    "📊 EDA",
     "⚙️ Preprocessing",
-    "📊 Visualisasi Data",
-    "🧠 Modeling",
-    "🔧 Hyperparameter Tuning",
-    "🏋️ Final Training",
-    "📈 Evaluasi"
+    "🧠 Modeling (LSTM / TCN / RBFNN)",
+    "📈 Prediction"
 ])
 
 uploaded_file = st.sidebar.file_uploader("Upload file Excel (.xlsx)", type=["xlsx"])
@@ -349,6 +350,12 @@ elif menu == "🔧 Hyperparameter Tuning":
         if st.button("🚀 Mulai Tuning Hyperparameter"):
             with st.spinner("⏳ Sedang melakukan tuning..."):
 
+                import optuna
+                from tensorflow.keras.models import Sequential
+                from tensorflow.keras.layers import LSTM, Dense, Dropout
+                from tensorflow.keras.optimizers import Adam
+                from tensorflow.keras.callbacks import EarlyStopping
+
                 def objective(trial):
                     lstm_units = trial.suggest_int('lstm_units', 10, 200)
                     dense_units = trial.suggest_int('dense_units', 10, 200)
@@ -398,210 +405,121 @@ elif menu == "🔧 Hyperparameter Tuning":
 
     else:
         st.warning("❗ Harap jalankan proses 'Modeling' terlebih dahulu agar X_train, X_test, y_train tersedia.")
-st.title("🔧 Tuning Hyperparameter LSTM dengan Optuna")
+    # ========== Final Training dengan Hyperparameter Terbaik ==========
+st.subheader("🏋️ Final Training dengan Hyperparameter Terbaik")
 
-# Cek apakah data tersedia
-required_keys = ['X_train', 'X_test', 'y_train', 'y_test']
-if not all(k in st.session_state for k in required_keys):
-    st.warning("❗ Harap lakukan preprocessing dan modeling terlebih dahulu sebelum tuning.")
-else:
-    X_train = st.session_state.X_train
-    X_test = st.session_state.X_test
-    y_train = st.session_state.y_train
-    y_test = st.session_state.y_test
-    n_features = X_train.shape[2]
+if st.button("🚀 Latih Model dengan Hyperparameter Terbaik"):
+    best_params = st.session_state.best_params
 
-    st.markdown("Klik tombol berikut untuk memulai proses tuning LSTM:")
+    tuned_model = Sequential()
+    tuned_model.add(LSTM(best_params['lstm_units'], activation='relu',
+                         dropout=best_params['dropout_rate'],
+                         recurrent_dropout=best_params['recurrent_dropout_rate'],
+                         return_sequences=True,
+                         input_shape=(X_train.shape[1], X_train.shape[2])))
+    tuned_model.add(Dropout(best_params['dropout_rate']))
+    tuned_model.add(LSTM(best_params['lstm_units'], activation='relu',
+                         dropout=best_params['dropout_rate'],
+                         recurrent_dropout=best_params['recurrent_dropout_rate']))
+    tuned_model.add(Dropout(best_params['dropout_rate']))
+    tuned_model.add(Dense(best_params['dense_units'], activation='relu'))
+    tuned_model.add(Dense(n_features))
 
-    if st.button("🚀 Mulai Tuning Hyperparameter"):
+    optimizer = Adam(learning_rate=best_params['learning_rate'])
+    tuned_model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
 
-        with st.spinner("⏳ Sedang melakukan tuning..."):
+    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
-            # Progress bar untuk memantau proses tuning
-            progress_bar = st.progress(0)
+    with st.spinner("🔁 Sedang melatih model..."):
+        history = tuned_model.fit(X_train, y_train,
+                                  epochs=best_params['epochs'],
+                                  batch_size=best_params['batch_size'],
+                                  validation_data=(X_test, y_test),
+                                  callbacks=[early_stopping],
+                                  shuffle=False,
+                                  verbose=0)
+        st.success("✅ Pelatihan selesai!")
 
-            # Buat class untuk callback agar update progress ke Streamlit
-            class StreamlitOptunaCallback:
-                def __init__(self, total_trials):
-                    self.total_trials = total_trials
-                    self.current_trial = 0
+    # Plot training history
+    fig, ax = plt.subplots()
+    ax.plot(history.history['loss'], label='Training Loss')
+    ax.plot(history.history['val_loss'], label='Validation Loss')
+    ax.set_xlabel('Epochs')
+    ax.set_ylabel('Loss')
+    ax.set_title('Training History (Best Hyperparameter)')
+    ax.legend()
+    st.pyplot(fig)
 
-                def __call__(self, study, trial):
-                    self.current_trial += 1
-                    progress_bar.progress(self.current_trial / self.total_trials)
+    # --- Prediksi ---
+    y_pred = tuned_model.predict(X_test)
 
-            def objective(trial):
-                lstm_units = trial.suggest_int('lstm_units', 10, 200)
-                dense_units = trial.suggest_int('dense_units', 10, 200)
-                dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
-                recurrent_dropout_rate = trial.suggest_float('recurrent_dropout_rate', 0.0, 0.5)
-                learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
-                epochs = trial.suggest_int('epochs', 20, 100)
-                batch_size = trial.suggest_int('batch_size', 16, 128)
+    # --- Inverse Transform & Plot ---
+    def inverse_transform_and_plot(y_true, y_pred, scaler, features):
+        inv_pred = scaler.inverse_transform(y_pred)
+        inv_true = scaler.inverse_transform(y_true)
 
-                model = Sequential()
-                model.add(LSTM(lstm_units, activation='relu', dropout=dropout_rate,
-                               recurrent_dropout=recurrent_dropout_rate,
-                               return_sequences=True,
-                               input_shape=(X_train.shape[1], X_train.shape[2])))
-                model.add(Dropout(dropout_rate))
-                model.add(LSTM(lstm_units, activation='relu',
-                               dropout=dropout_rate,
-                               recurrent_dropout=recurrent_dropout_rate))
-                model.add(Dropout(dropout_rate))
-                model.add(Dense(dense_units, activation='relu'))
-                model.add(Dense(n_features))
-
-                optimizer = Adam(learning_rate=learning_rate)
-                model.compile(optimizer=optimizer, loss='mean_squared_error')
-
-                early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-
-                model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-                          validation_data=(X_test, y_test),
-                          callbacks=[early_stopping], verbose=0, shuffle=False)
-
-                loss = model.evaluate(X_test, y_test, verbose=0)
-                return loss
-
-            # Mulai proses tuning
-            n_trials = 30
-            study = optuna.create_study(direction='minimize')
-            streamlit_callback = StreamlitOptunaCallback(total_trials=n_trials)
-            study.optimize(objective, n_trials=n_trials, callbacks=[streamlit_callback])
-
-            # Tampilkan hasil
-            st.success("✅ Proses tuning selesai!")
-            st.subheader("🔍 Best Hyperparameters")
-            for key, val in study.best_params.items():
-                st.markdown(f"- **{key}**: `{val}`")
-
-            # Simpan ke session_state
-            st.session_state.best_params = study.best_params
-    elif menu == "🏋️ Final Training":
-        st.subheader("🏋️ Final Training dengan Hyperparameter Terbaik")
-
-        if 'best_params' not in st.session_state:
-            st.warning("❗ Hyperparameter belum tersedia. Harap jalankan proses tuning Optuna terlebih dahulu.")
-        elif not all(k in st.session_state for k in ['X_train', 'X_test', 'y_train', 'y_test']):
-            st.warning("❗ Data latih dan test belum tersedia. Silakan lakukan preprocessing dan modeling terlebih dahulu.")
-        else:
-            # Ambil data dari session_state
-            best_params = st.session_state.best_params
-            X_train = st.session_state.X_train
-            X_test = st.session_state.X_test
-            y_train = st.session_state.y_train
-            y_test = st.session_state.y_test
-            n_features = X_train.shape[2]
-    
-            # Buat model
-            model = Sequential()
-            model.add(LSTM(best_params['lstm_units'], activation='relu',
-                           dropout=best_params['dropout_rate'],
-                           recurrent_dropout=best_params['recurrent_dropout_rate'],
-                           return_sequences=True,
-                           input_shape=(X_train.shape[1], X_train.shape[2])))
-            model.add(Dropout(best_params['dropout_rate']))
-            model.add(LSTM(best_params['lstm_units'], activation='relu',
-                           dropout=best_params['dropout_rate'],
-                           recurrent_dropout=best_params['recurrent_dropout_rate']))
-            model.add(Dropout(best_params['dropout_rate']))
-            model.add(Dense(best_params['dense_units'], activation='relu'))
-            model.add(Dense(n_features))
-    
-            optimizer = Adam(learning_rate=best_params['learning_rate'])
-            model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
-    
-            early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-    
-            if st.button("🚀 Mulai Final Training"):
-                with st.spinner("⏳ Sedang melatih model..."):
-                    history = model.fit(X_train, y_train,
-                                        epochs=best_params['epochs'],
-                                        batch_size=best_params['batch_size'],
-                                        validation_data=(X_test, y_test),
-                                        callbacks=[early_stopping],
-                                        shuffle=False,
-                                        verbose=0)
-                    st.success("✅ Training selesai!")
-                
-                # Simpan model ke session_state
-                st.session_state.final_model = model
-    
-                # Evaluasi
-                loss, mae = model.evaluate(X_test, y_test, verbose=0)
-                st.metric("MSE (Test Loss)", f"{loss:.5f}")
-                st.metric("MAE (Test MAE)", f"{mae:.5f}")
-    
-                # Plot training history
-                fig, ax = plt.subplots()
-                ax.plot(history.history['loss'], label='Training Loss')
-                ax.plot(history.history['val_loss'], label='Validation Loss')
-                ax.set_xlabel('Epoch')
-                ax.set_ylabel('Loss')
-                ax.set_title('Training History')
-                ax.legend()
-                st.pyplot(fig)
-
-
-        # Prediksi
-        y_pred = tuned_model.predict(X_test)
-
-        # Inverse transform
-        y_pred_inv = scaler.inverse_transform(y_pred)
-        y_test_inv = scaler.inverse_transform(y_test)
-
-        # Plot hasil aktual vs prediksi
         for i in range(len(features)):
-            fig2, ax2 = plt.subplots(figsize=(20, 6))
-            ax2.plot(y_test_inv[:, i], label='Aktual')
-            ax2.plot(y_pred_inv[:, i], label='Prediksi')
-            ax2.set_title(f'Aktual vs Prediksi untuk {features[i]}')
-            ax2.set_xlabel('Time Step')
-            ax2.set_ylabel(features[i])
-            ax2.legend()
-            st.pyplot(fig2)
+            fig, ax = plt.subplots(figsize=(20, 6))
+            ax.plot(inv_true[:, i], label='Aktual')
+            ax.plot(inv_pred[:, i], label='Prediksi')
+            ax.set_title(f'Aktual vs Prediksi untuk {features[i]}')
+            ax.set_xlabel('Time Step')
+            ax.set_ylabel(features[i])
+            ax.legend()
+            st.pyplot(fig)
 
-        # Evaluasi metrik
-        def calculate_metrics(y_true, y_pred, features):
-            metrics = {
-                'Feature': [],
-                'MAE': [],
-                'R2 Score': [],
-                'RMSE': [],
-                'MAPE (%)': []
-            }
-            for i, feature in enumerate(features):
-                actual = y_true[:, i]
-                pred = y_pred[:, i]
+        return inv_true, inv_pred
 
-                mae = mean_absolute_error(actual, pred)
-                r2 = r2_score(actual, pred)
-                rmse = np.sqrt(mean_squared_error(actual, pred))
-                mape = np.mean(np.abs((actual - pred) / actual)) * 100
+    # --- Buat DataFrame Prediksi vs Aktual ---
+    def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
+        y_true_flat = y_true.flatten()
+        y_pred_flat = np.round(y_pred.flatten(), 3)
 
-                metrics['Feature'].append(feature)
-                metrics['MAE'].append(round(mae, 3))
-                metrics['R2 Score'].append(round(r2, 3))
-                metrics['RMSE'].append(round(rmse, 3))
-                metrics['MAPE (%)'].append(round(mape, 2))
+        df_final = pd.DataFrame({
+            f'{feature_name}': y_true_flat,
+            f'{feature_name}_pred': y_pred_flat
+        })
+        return df_final
 
-            return pd.DataFrame(metrics)
+    # --- Evaluasi Metrik ---
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+    import numpy as np
 
-    # Jalankan semua proses
-    y_test_inv, y_pred_inv = inverse_transform_and_plot(y_test, y_pred, scaler, features)
+    def calculate_metrics(y_true, y_pred, features):
+        metrics = {
+            'Feature': [],
+            'MAE': [],
+            'R2 Score': [],
+            'RMSE': [],
+            'MAPE (%)': []
+        }
 
-    # Tampilkan tabel Prediksi vs Aktual
-    df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, feature_name=features[0])
+        for i, feature in enumerate(features):
+            actual = y_true[:, i].flatten()
+            predicted = y_pred[:, i].flatten()
+
+            mae = mean_absolute_error(actual, predicted)
+            r2 = r2_score(actual, predicted)
+            rmse = np.sqrt(mean_squared_error(actual, predicted))
+            mape = np.mean(np.abs((actual - predicted) / actual)) * 100
+
+            metrics['Feature'].append(feature)
+            metrics['MAE'].append(round(mae, 3))
+            metrics['R2 Score'].append(round(r2, 3))
+            metrics['RMSE'].append(round(rmse, 3))
+            metrics['MAPE (%)'].append(round(mape, 2))
+
+        return pd.DataFrame(metrics)
+
+    # --- Jalankan semua ---
+    y_test_inverse, y_pred_inverse = inverse_transform_and_plot(y_test, y_pred, scaler, features)
+
+    df_pred = create_predictions_dataframe(y_test_inverse, y_pred_inverse, feature_name=features[0])
     st.subheader("📋 Tabel Prediksi vs Aktual")
     st.dataframe(df_pred.head(30))
 
-if 'y_test_inv' in locals() and 'y_pred_inv' in locals():
-    # Tampilkan metrik evaluasi
     st.subheader("📊 Evaluasi Akurasi Model")
-    df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features)
+    df_metrics = calculate_metrics(y_test_inverse, y_pred_inverse, features)
     st.dataframe(df_metrics)
-else:
-    st.warning("❗ Pastikan Anda telah melakukan pelatihan model dan semua variabel tersedia.")
 
-        
+
