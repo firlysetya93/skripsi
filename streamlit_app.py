@@ -601,6 +601,6 @@ else:
     df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features)
     st.dataframe(df_metrics)
 
-else:
-    st.warning("❗ Pastikan Anda telah melakukan pelatihan model dan semua variabel tersedia.")
+    else:
+        st.warning("❗ Pastikan Anda telah melakukan pelatihan model dan semua variabel tersedia.")
         
