@@ -335,4 +335,75 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
 elif menu == "📈 Prediction":
     st.title("📈 Halaman Prediksi")
     st.info("🔧 Fitur ini masih dalam pengembangan.")
+elif menu == "🔧 Hyperparameter Tuning":
+    st.title("🔧 Tuning Hyperparameter LSTM dengan Optuna")
+
+    if 'X_train' in st.session_state and 'X_test' in st.session_state:
+        X_train = st.session_state.X_train
+        X_test = st.session_state.X_test
+        y_train = st.session_state.y_train
+        y_test = st.session_state.y_test
+        n_features = X_train.shape[2]
+
+        st.markdown("Klik tombol di bawah untuk menjalankan proses **tuning LSTM** dengan Optuna:")
+        
+        if st.button("🚀 Mulai Tuning Hyperparameter"):
+            with st.spinner("⏳ Sedang melakukan tuning..."):
+
+                import optuna
+                from tensorflow.keras.models import Sequential
+                from tensorflow.keras.layers import LSTM, Dense, Dropout
+                from tensorflow.keras.optimizers import Adam
+                from tensorflow.keras.callbacks import EarlyStopping
+
+                def objective(trial):
+                    lstm_units = trial.suggest_int('lstm_units', 10, 200)
+                    dense_units = trial.suggest_int('dense_units', 10, 200)
+                    dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
+                    recurrent_dropout_rate = trial.suggest_float('recurrent_dropout_rate', 0.0, 0.5)
+                    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+                    epochs = trial.suggest_int('epochs', 20, 100)
+                    batch_size = trial.suggest_int('batch_size', 16, 128)
+
+                    # Define model
+                    model = Sequential()
+                    model.add(LSTM(lstm_units, activation='relu',
+                                   dropout=dropout_rate,
+                                   recurrent_dropout=recurrent_dropout_rate,
+                                   return_sequences=True,
+                                   input_shape=(X_train.shape[1], X_train.shape[2])))
+                    model.add(Dropout(dropout_rate))
+                    model.add(LSTM(lstm_units, activation='relu',
+                                   dropout=dropout_rate,
+                                   recurrent_dropout=recurrent_dropout_rate))
+                    model.add(Dropout(dropout_rate))
+                    model.add(Dense(dense_units, activation='relu'))
+                    model.add(Dense(n_features))
+
+                    optimizer = Adam(learning_rate=learning_rate)
+                    model.compile(optimizer=optimizer, loss='mean_squared_error')
+
+                    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+                    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
+                              validation_data=(X_test, y_test), callbacks=[early_stopping],
+                              verbose=0, shuffle=False)
+
+                    loss = model.evaluate(X_test, y_test, verbose=0)
+                    return loss
+
+                study = optuna.create_study(direction='minimize')
+                study.optimize(objective, n_trials=30)
+
+                st.success("✅ Tuning selesai!")
+                st.write("### 🔍 Best Hyperparameters")
+                for key, val in study.best_params.items():
+                    st.write(f"- **{key}**: `{val}`")
+
+                # Simpan ke session_state
+                st.session_state.best_params = study.best_params
+
+    else:
+        st.warning("❗ Harap jalankan proses 'Modeling' terlebih dahulu agar X_train, X_test, y_train tersedia.")
+
 
