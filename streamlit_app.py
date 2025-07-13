@@ -596,11 +596,12 @@ else:
     st.subheader("📋 Tabel Prediksi vs Aktual")
     st.dataframe(df_pred.head(30))
 
+if 'y_test_inv' in locals() and 'y_pred_inv' in locals():
     # Tampilkan metrik evaluasi
     st.subheader("📊 Evaluasi Akurasi Model")
     df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features)
     st.dataframe(df_metrics)
+else:
+    st.warning("❗ Pastikan Anda telah melakukan pelatihan model dan semua variabel tersedia.")
 
-        else:
-            st.warning("❗ Pastikan Anda telah melakukan pelatihan model dan semua variabel tersedia.")
         
