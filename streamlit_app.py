@@ -455,7 +455,7 @@ else:
     df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
     st.dataframe(df_metrics)
 # ========== Menu Prediction ==========
-elif menu == "📈 Prediction":
+if 'menu' in st.session_state and st.session_state.menu == "📈 Prediction":
     st.title("📈 Halaman Prediksi")
 
     if all(k in st.session_state for k in ['tuned_model', 'X_test', 'y_test', 'scaler', 'features']):
