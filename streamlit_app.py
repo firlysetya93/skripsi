@@ -5,11 +5,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import io
-import tensorflow as tf
-from tensorflow.keras.callbacks import LearningRateScheduler, EarlyStopping, ModelCheckpoint
-from tensorflow.keras.layers import Flatten, Dropout, Dense, LSTM
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.optimizers import Adam
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import adfuller
