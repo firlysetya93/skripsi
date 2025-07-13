@@ -577,8 +577,19 @@ if st.button("🚀 Latih Model dengan Hyperparameter Terbaik"):
 
             return pd.DataFrame(metrics)
 
-        df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features)
+    # Jalankan semua proses
+    y_test_inv, y_pred_inv = inverse_transform_and_plot(y_test, y_pred, scaler, features)
 
-        st.subheader("📊 Evaluasi Akurasi Model")
-        st.dataframe(df_metrics)
+    # Tampilkan tabel Prediksi vs Aktual
+    df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, feature_name=features[0])
+    st.subheader("📋 Tabel Prediksi vs Aktual")
+    st.dataframe(df_pred.head(30))
+
+    # Tampilkan metrik evaluasi
+    st.subheader("📊 Evaluasi Akurasi Model")
+    df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features)
+    st.dataframe(df_metrics)
+
+else:
+    st.warning("❗ Pastikan Anda telah melakukan pelatihan model dan semua variabel tersedia.")
         
