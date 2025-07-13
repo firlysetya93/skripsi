@@ -5,6 +5,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import io
+import tensorflow as tf
+from tensorflow.keras.callbacks import LearningRateScheduler, EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import Flatten, Dropout, Dense, LSTM
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
@@ -197,6 +203,7 @@ elif menu == "⚙️ Preprocessing":
         st.subheader("📏 Normalisasi Data")
         scaler = MinMaxScaler()
         scaled_values = scaler.fit_transform(df_musim['FF_X'].values.reshape(-1, 1))
+        st.session_state.scaler = scaler
         st.success("✅ Normalisasi selesai menggunakan MinMaxScaler.")
 
         # --------- VISUALISASI PEMBAGIAN ---------
@@ -306,6 +313,12 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         X_test = test_X.reshape((test_X.shape[0], n_days, n_features))
         y_train = train_y.reshape(-1, 1)
         y_test = test_y.reshape(-1, 1)
+        st.session_state.X_train = X_train
+        st.session_state.X_test = X_test
+        st.session_state.y_train = y_train
+        st.session_state.y_test = y_test
+        st.session_state.n_features = n_features
+
 
         st.write("📐 Shape X_train:", X_train.shape)
         st.write("📐 Shape y_train:", y_train.shape)
@@ -377,6 +390,36 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
                 model1.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
                 history1, loss1 = train_model(model1, X_train, y_train, X_test, y_test)
                 st.session_state.model1 = model1
+
+                if 'model1' in st.session_state and 'X_test' in st.session_state and 'y_test' in st.session_state and 'scaler' in st.session_state:
+                    model = st.session_state.model1
+                    X_test = st.session_state.X_test
+                    y_test = st.session_state.y_test
+                    scaler = st.session_state.scaler
+            
+                    y_pred = model.predict(X_test)
+                    y_test_inv = scaler.inverse_transform(y_test)
+                    y_pred_inv = scaler.inverse_transform(y_pred)
+            
+                    st.session_state.y_test_inv = y_test_inv
+                    st.session_state.y_pred_inv = y_pred_inv
+                else:
+                    y_test_inv = st.session_state.get('y_test_inv', None)
+                    y_pred_inv = st.session_state.get('y_pred_inv', None)
+            
+                # ======= Setelah itu lanjutkan ke plotting hasil prediksi =======
+                if y_test_inv is not None and y_pred_inv is not None:
+                    features = st.session_state.get('features', ['FF_X'])
+            
+                    fig, ax = plt.subplots(figsize=(20, 6))
+                    ax.plot(y_test_inv[:, 0], label='Actual')
+                    ax.plot(y_pred_inv[:, 0], label='Predicted')
+                    ax.set_title(f'📉 Prediksi vs Aktual untuk {features[0]}')
+                    ax.set_xlabel('Time')
+                    ax.set_ylabel(features[0])
+                    ax.legend()
+                    st.pyplot(fig)
+
         
             st.subheader("📌 Model 2: LSTM Deep")
             if st.button("🚀 Latih Model 2"):
