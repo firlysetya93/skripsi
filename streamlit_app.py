@@ -6,7 +6,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import io
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.seasonal import seasonal_decompose
