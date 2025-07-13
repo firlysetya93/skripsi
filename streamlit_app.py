@@ -255,5 +255,56 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         # Tampilkan summary
         with st.expander("📋 LSTM Model Summary"):
             st.text(model1.summary())
+            # ------------------------- TRAINING DENGAN CALLBACK -------------------------
+        st.subheader("🏋️ Training dengan Scheduler & Checkpoint")
+
+        def train_model_streamlit(model, X_train, y_train, X_test, y_test,
+                                  learning_rate=0.001, batch_size=32, epochs=50,
+                                  patience=5, filepath='best_model.h5'):
+            # Scheduler untuk learning rate
+            def scheduler(epoch, lr):
+                if epoch < 10:
+                    return lr
+                else:
+                    return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
+
+            lr_scheduler = LearningRateScheduler(scheduler)
+            early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+            checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
+
+            # Training
+            with st.spinner("⏳ Model sedang dilatih..."):
+                history = model.fit(X_train, y_train,
+                                    epochs=epochs,
+                                    batch_size=batch_size,
+                                    validation_data=(X_test, y_test),
+                                    callbacks=[lr_scheduler, early_stopping, checkpointer],
+                                    verbose=0,
+                                    shuffle=False)
+
+            st.success("✅ Training selesai!")
+
+            # Evaluasi
+            loss, mae = model.evaluate(X_test, y_test, verbose=0)
+            st.metric("MSE (Test Loss)", f"{loss:.5f}")
+            st.metric("MAE (Test MAE)", f"{mae:.5f}")
+
+            # Plot history
+            fig, ax = plt.subplots()
+            ax.plot(history.history['loss'], label='Training Loss')
+            ax.plot(history.history['val_loss'], label='Validation Loss')
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel('Loss')
+            ax.set_title('Training History')
+            ax.legend()
+            st.pyplot(fig)
+
+            return history, loss
+
+        # Tombol untuk mulai training
+        if st.button("🚀 Mulai Training (dengan Scheduler & Checkpoint)"):
+            history1, test_loss1 = train_model_streamlit(model1, X_train, y_train, X_test, y_test)
+            st.session_state.history1 = history1
+
 
 
