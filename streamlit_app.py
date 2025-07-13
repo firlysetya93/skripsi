@@ -478,3 +478,106 @@ else:
 
             # Simpan ke session_state
             st.session_state.best_params = study.best_params
+st.subheader("🏋️ Final Training dengan Hyperparameter Terbaik")
+
+if st.button("🚀 Latih Model dengan Hyperparameter Terbaik"):
+    # Cek apakah semua yang dibutuhkan tersedia di session_state
+    if 'best_params' not in st.session_state:
+        st.error("❗ Hyperparameter belum tersedia. Harap jalankan proses tuning Optuna terlebih dahulu.")
+    elif not all(k in st.session_state for k in ['X_train', 'X_test', 'y_train', 'y_test', 'scaler']):
+        st.error("❗ Data latih dan scaler belum tersedia. Silakan lakukan preprocessing dan modeling terlebih dahulu.")
+    else:
+        # Ambil variabel dari session_state
+        best_params = st.session_state.best_params
+        X_train = st.session_state.X_train
+        X_test = st.session_state.X_test
+        y_train = st.session_state.y_train
+        y_test = st.session_state.y_test
+        scaler = st.session_state.scaler
+        features = ['FF_X']  # Sesuaikan jika fitur lebih dari satu
+        n_features = X_train.shape[2]
+
+        # Bangun dan latih model
+        tuned_model = Sequential()
+        tuned_model.add(LSTM(best_params['lstm_units'], activation='relu',
+                             dropout=best_params['dropout_rate'],
+                             recurrent_dropout=best_params['recurrent_dropout_rate'],
+                             return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+        tuned_model.add(Dropout(best_params['dropout_rate']))
+        tuned_model.add(LSTM(best_params['lstm_units'], activation='relu',
+                             dropout=best_params['dropout_rate'],
+                             recurrent_dropout=best_params['recurrent_dropout_rate']))
+        tuned_model.add(Dropout(best_params['dropout_rate']))
+        tuned_model.add(Dense(best_params['dense_units'], activation='relu'))
+        tuned_model.add(Dense(n_features))
+
+        optimizer = Adam(learning_rate=best_params['learning_rate'])
+        tuned_model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
+
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+        with st.spinner("🔁 Sedang melatih model..."):
+            history = tuned_model.fit(X_train, y_train, epochs=best_params['epochs'],
+                                      batch_size=best_params['batch_size'],
+                                      validation_data=(X_test, y_test),
+                                      callbacks=[early_stopping], shuffle=False, verbose=0)
+            st.success("✅ Pelatihan selesai!")
+
+        # Visualisasi training history
+        fig, ax = plt.subplots()
+        ax.plot(history.history['loss'], label='Training Loss')
+        ax.plot(history.history['val_loss'], label='Validation Loss')
+        ax.set_xlabel('Epochs')
+        ax.set_ylabel('Loss')
+        ax.set_title('Training History')
+        ax.legend()
+        st.pyplot(fig)
+
+        # Prediksi
+        y_pred = tuned_model.predict(X_test)
+
+        # Inverse transform
+        y_pred_inv = scaler.inverse_transform(y_pred)
+        y_test_inv = scaler.inverse_transform(y_test)
+
+        # Plot hasil aktual vs prediksi
+        for i in range(len(features)):
+            fig2, ax2 = plt.subplots(figsize=(20, 6))
+            ax2.plot(y_test_inv[:, i], label='Aktual')
+            ax2.plot(y_pred_inv[:, i], label='Prediksi')
+            ax2.set_title(f'Aktual vs Prediksi untuk {features[i]}')
+            ax2.set_xlabel('Time Step')
+            ax2.set_ylabel(features[i])
+            ax2.legend()
+            st.pyplot(fig2)
+
+        # Evaluasi metrik
+        def calculate_metrics(y_true, y_pred, features):
+            metrics = {
+                'Feature': [],
+                'MAE': [],
+                'R2 Score': [],
+                'RMSE': [],
+                'MAPE (%)': []
+            }
+            for i, feature in enumerate(features):
+                actual = y_true[:, i]
+                pred = y_pred[:, i]
+
+                mae = mean_absolute_error(actual, pred)
+                r2 = r2_score(actual, pred)
+                rmse = np.sqrt(mean_squared_error(actual, pred))
+                mape = np.mean(np.abs((actual - pred) / actual)) * 100
+
+                metrics['Feature'].append(feature)
+                metrics['MAE'].append(round(mae, 3))
+                metrics['R2 Score'].append(round(r2, 3))
+                metrics['RMSE'].append(round(rmse, 3))
+                metrics['MAPE (%)'].append(round(mape, 2))
+
+            return pd.DataFrame(metrics)
+
+        df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features)
+
+        st.subheader("📊 Evaluasi Akurasi Model")
+        st.dataframe(df_metrics)
