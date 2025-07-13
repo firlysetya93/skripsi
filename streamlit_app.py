@@ -4,27 +4,26 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.preprocessing import MinMaxScaler
 import io
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from statsmodels.tsa.stattools import adfuller
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping
-import optuna
+
+# Safe import for optional modules
+try:
+    from sklearn.preprocessing import MinMaxScaler
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+    import optuna
+    from statsmodels.tsa.stattools import adfuller
+    from statsmodels.tsa.seasonal import seasonal_decompose
+    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
+    from tensorflow.keras.callbacks import EarlyStopping
+except ImportError as e:
+    st.error(f"ImportError: {e}. Please make sure all dependencies are installed.")
+    st.stop()
 
 st.set_page_config(page_title="🌪️ Aplikasi Prediksi Kecepatan Angin", layout="wide")
 
-# Sidebar
-menu = st.sidebar.selectbox("Navigasi Menu", [
-    "🏠 Home",
-    "📄 Upload Data",
-    "📊 EDA",
-    "⚙️ Preprocessing"
-])
+menu = st.sidebar.selectbox("Navigasi Menu", ["🏠 Home", "📄 Upload Data", "📊 EDA", "⚙️ Preprocessing"])
 
 uploaded_file = st.sidebar.file_uploader("Upload file Excel (.xlsx)", type=["xlsx"])
 
@@ -61,6 +60,22 @@ elif menu == "📊 EDA":
             df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
             df.set_index('TANGGAL', inplace=True)
             st.line_chart(df['FF_X'])
+            ts = df['FF_X'].dropna()
+            fig, axes = plt.subplots(3, 1, figsize=(14, 10))
+            plot_acf(ts, lags=50, ax=axes[0])
+            axes[0].set_title("ACF")
+            plot_pacf(ts, lags=50, ax=axes[1], method='ywm')
+            axes[1].set_title("PACF")
+            axes[2].plot(ts)
+            axes[2].set_title("Time Series")
+            st.pyplot(fig)
+            result = seasonal_decompose(ts, model='additive', period=30)
+            fig, axes = plt.subplots(4, 1, figsize=(16, 12))
+            axes[0].plot(result.observed)
+            axes[1].plot(result.trend)
+            axes[2].plot(result.seasonal)
+            axes[3].plot(result.resid)
+            st.pyplot(fig)
     else:
         st.warning("Silakan upload file terlebih dahulu.")
 
@@ -69,15 +84,12 @@ elif menu == "⚙️ Preprocessing":
     if df is not None:
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
         df['Bulan'] = df['TANGGAL'].dt.month
-
         def musim(bulan):
             if bulan in [12,1,2]: return 'HUJAN'
             elif bulan in [3,4,5]: return 'PANCAROBA I'
             elif bulan in [6,7,8]: return 'KEMARAU'
-            else: return 'PANCAROBA II'
-
+            return 'PANCAROBA II'
         df['Musim'] = df['Bulan'].apply(musim)
-
         df['FF_X'] = df.groupby('Musim')['FF_X'].transform(lambda x: x.fillna(x.mean()))
         df.set_index('TANGGAL', inplace=True)
 
@@ -114,21 +126,19 @@ elif menu == "⚙️ Preprocessing":
             model.add(Dropout(trial.suggest_float('dropout2', 0.0, 0.5)))
             model.add(Dense(1))
             model.compile(optimizer='adam', loss='mse')
-            early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
             model.fit(X_train, y_train, validation_data=(X_test, y_test),
-                      epochs=50, batch_size=32, verbose=0, callbacks=[early_stopping], shuffle=False)
+                      epochs=50, batch_size=32, verbose=0, shuffle=False)
             loss = model.evaluate(X_test, y_test, verbose=0)
             return loss
 
-        st.info("Melakukan tuning hyperparameter...")
+        st.info("🔍 Tuning model...")
         study = optuna.create_study(direction='minimize')
-        study.optimize(objective, n_trials=10)
+        study.optimize(objective, n_trials=5)
+        st.success("✅ Selesai tuning.")
 
-        st.success("Tuning selesai.")
-        st.json(study.best_params)
-
-        # Final training
         best_params = study.best_params
+        st.json(best_params)
+
         model = Sequential()
         model.add(LSTM(best_params['lstm_units'], return_sequences=True, input_shape=(n_days, n_features)))
         model.add(Dropout(best_params['dropout']))
@@ -137,17 +147,15 @@ elif menu == "⚙️ Preprocessing":
         model.add(Dense(1))
         model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
-        history = model.fit(X_train, y_train, validation_data=(X_test, y_test),
-                            epochs=100, batch_size=32, verbose=1,
-                            callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)],
-                            shuffle=False)
+        model.fit(X_train, y_train, validation_data=(X_test, y_test),
+                  epochs=100, batch_size=32, verbose=1,
+                  callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)],
+                  shuffle=False)
 
-        # Predict
         y_pred = model.predict(X_test)
         y_pred_inv = scaler.inverse_transform(y_pred)
         y_test_inv = scaler.inverse_transform(y_test)
 
-        # Plot
         fig, ax = plt.subplots(figsize=(14, 6))
         ax.plot(y_test_inv, label='Aktual')
         ax.plot(y_pred_inv, label='Prediksi')
@@ -155,7 +163,6 @@ elif menu == "⚙️ Preprocessing":
         ax.legend()
         st.pyplot(fig)
 
-        # Metrics
         def calculate_metrics(y_true, y_pred):
             y_true, y_pred = y_true.flatten(), y_pred.flatten()
             mae = mean_absolute_error(y_true, y_pred)
