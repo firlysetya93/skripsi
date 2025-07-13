@@ -7,4 +7,4 @@ scikit-learn
 statsmodels
 openpyxl
 tensorflow
-sequential
+
