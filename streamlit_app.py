@@ -19,7 +19,7 @@ menu = st.sidebar.selectbox("Navigasi Menu", [
     "📤 Upload Data",
     "📊 EDA",
     "⚙️ Preprocessing",
-    "🧠 Modeling (LSTM / TCN / RBFNN)",
+    "🏗️ Modeling"",
     "📈 Prediction"
 ])
 
