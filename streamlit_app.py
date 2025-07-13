@@ -302,8 +302,9 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
             return history, loss
 
         # Tombol untuk mulai training
-        if st.button("🚀 Mulai Training (dengan Scheduler & Checkpoint)"):
-            history1, test_loss1 = train_model_streamlit(model1, X_train, y_train, X_test, y_test)
+        if st.button("🚀 Jalankan Model LSTM Lengkap"):
+            history1, test_loss1 = train_model_streamlit_full(model1, X_train, y_train, X_test, y_test)
             st.session_state.history1 = history1
+
 
 
