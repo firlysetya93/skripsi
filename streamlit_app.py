@@ -146,3 +146,62 @@ elif menu == "⚙️ Preprocessing":
 """)
     else:
         st.warning("❗ Silakan upload file terlebih dahulu.")
+# Tambahkan ini di awal file kalau belum ada
+from sklearn.preprocessing import MinMaxScaler
+import numpy as np
+
+# Tambahkan ini ke dalam bagian menu
+elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
+    st.title("🧠 Transformasi Supervised Learning (Lag Feature)")
+
+    if 'df_musim' in st.session_state:
+        df_musim = st.session_state.df_musim
+
+        # Menampilkan nilai min dan max
+        st.subheader("📏 Statistik Kolom FF_X")
+        min_val = df_musim['FF_X'].min()
+        max_val = df_musim['FF_X'].max()
+        st.write(f"**Nilai Minimum FF_X:** {min_val}")
+        st.write(f"**Nilai Maksimum FF_X:** {max_val}")
+
+        # Normalisasi
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        scaled = scaler.fit_transform(df_musim[['FF_X']])
+        st.success("✅ Data telah dinormalisasi menggunakan MinMaxScaler.")
+
+        # Fungsi konversi ke supervised
+        def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+            df = pd.DataFrame(data)
+            n_vars = df.shape[1]
+            cols, names = [], []
+            for i in range(n_in, 0, -1):
+                cols.append(df.shift(i))
+                names += [f'var{j+1}(t-{i})' for j in range(n_vars)]
+            for i in range(0, n_out):
+                cols.append(df.shift(-i))
+                if i == 0:
+                    names += [f'var{j+1}(t)' for j in range(n_vars)]
+                else:
+                    names += [f'var{j+1}(t+{i})' for j in range(n_vars)]
+            agg = pd.concat(cols, axis=1)
+            agg.columns = names
+            if dropnan:
+                agg.dropna(inplace=True)
+            return agg
+
+        # Input lag dari user
+        n_days = st.slider("🔢 Pilih jumlah lag (hari)", 1, 30, 6)
+        n_features = 1
+
+        reframed = series_to_supervised(scaled, n_days, 1)
+
+        st.subheader("🧾 Data Setelah Diubah ke Supervised Format")
+        st.write(f"Shape: {reframed.shape}")
+        st.dataframe(reframed.head(10))
+
+        # Simpan ke session state jika ingin digunakan selanjutnya
+        st.session_state.reframed = reframed
+
+    else:
+        st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
+
