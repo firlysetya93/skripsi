@@ -2,11 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-from tensorflow.keras.callbacks import EarlyStopping
+
 
 # ========================== SETUP ==========================
 st.set_page_config(page_title="🌪️ Prediksi Kecepatan Angin", layout="wide")
