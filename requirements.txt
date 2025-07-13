@@ -3,8 +3,8 @@ pandas
 numpy
 matplotlib
 seaborn
+scikit-learn
+tensorflow
 optuna
 openpyxl
 statsmodels
-tensorflow>=2.10.0
-scikit-learn>=1.0
