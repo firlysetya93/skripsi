@@ -226,268 +226,183 @@ elif menu == "⚙️ Preprocessing":
         st.warning("❗ Silakan upload file terlebih dahulu.")
 # ========== MODELING ==========
 elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
-    st.title("🧠 Transformasi Supervised Learning (Lag Feature)")
+    import tensorflow as tf
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import LSTM, Dense, Dropout, Flatten
+    from tensorflow.keras.optimizers import Adam
+    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, LearningRateScheduler
 
-    if 'df_musim' in st.session_state:
-        df_musim = st.session_state.df_musim
+    st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
 
-        # Menampilkan nilai min dan max
-        st.subheader("📏 Statistik Kolom FF_X")
-        min_val = df_musim['FF_X'].min()
-        max_val = df_musim['FF_X'].max()
-        st.write(f"**Nilai Minimum FF_X:** {min_val}")
-        st.write(f"**Nilai Maksimum FF_X:** {max_val}")
-
-        # Normalisasi
-        scaler = MinMaxScaler(feature_range=(0, 1))
-        scaled = scaler.fit_transform(df_musim[['FF_X']])
-        st.success("✅ Data telah dinormalisasi menggunakan MinMaxScaler.")
-
-        # Fungsi konversi ke supervised
-        def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
-            df = pd.DataFrame(data)
-            n_vars = df.shape[1]
-            cols, names = [], []
-            for i in range(n_in, 0, -1):
-                cols.append(df.shift(i))
-                names += [f'var{j+1}(t-{i})' for j in range(n_vars)]
-            for i in range(0, n_out):
-                cols.append(df.shift(-i))
-                if i == 0:
-                    names += [f'var{j+1}(t)' for j in range(n_vars)]
-                else:
-                    names += [f'var{j+1}(t+{i})' for j in range(n_vars)]
-            agg = pd.concat(cols, axis=1)
-            agg.columns = names
-            if dropnan:
-                agg.dropna(inplace=True)
-            return agg
-
-        # Input lag dari user
-        n_days = st.slider("🔢 Pilih jumlah lag (hari)", 1, 30, 6)
-        n_features = 1
-
-        reframed = series_to_supervised(scaled, n_days, 1)
-
-        st.subheader("🧾 Data Setelah Diubah ke Supervised Format")
-        st.write(f"Shape: {reframed.shape}")
-        st.dataframe(reframed.head(10))
-
-        # Simpan ke session state jika ingin digunakan selanjutnya
-        st.session_state.reframed = reframed
+    if 'reframed' not in st.session_state or 'df_musim' not in st.session_state:
+        st.warning("❗ Silakan lakukan preprocessing dan transformasi supervised (lag) terlebih dahulu.")
     else:
-        st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
-        # ------------------------- TRAIN TEST SPLIT -------------------------
-        st.subheader("🧪 Split Data untuk LSTM")
+        reframed = st.session_state.reframed
+        df_musim = st.session_state.df_musim
+        n_days = st.session_state.get('n_days', 6)
+        n_features = 1  # karena hanya FF_X
 
-        # Ambil nilai array dari dataframe hasil reframing
+        # Split data supervised menjadi train-test (80-20) tanpa shuffle
         values = reframed.values
-
-        # Simpan index tanggal dari hasil reframing
-        date_reframed = df_musim.index[reframed.index]
-
-        # Split manual (tanpa shuffle)
         train_size = int(len(values) * 0.8)
         train, test = values[:train_size], values[train_size:]
 
-        # Bagi juga tanggal
-        date_train = date_reframed[:len(train)]
-        date_test = date_reframed[len(train):]
+        train_X, train_y = train[:, :n_days*n_features], train[:, -1]
+        test_X, test_y = test[:, :n_days*n_features], test[:, -1]
 
-        st.write(f"Jumlah data: {len(values)}")
-        st.write(f"Jumlah train: {len(train)} ({date_train.min().date()} s.d. {date_train.max().date()})")
-        st.write(f"Jumlah test : {len(test)} ({date_test.min().date()} s.d. {date_test.max().date()})")
-
-        # ------------------------- PISAHKAN X dan y -------------------------
-        n_obs = n_days * n_features
-        train_X, train_y = train[:, :n_obs], train[:, -1]
-        test_X, test_y = test[:, :n_obs], test[:, -1]
-
-        # Reshape untuk LSTM
+        # Reshape untuk LSTM input (samples, timesteps, features)
         X_train = train_X.reshape((train_X.shape[0], n_days, n_features))
         X_test = test_X.reshape((test_X.shape[0], n_days, n_features))
         y_train = train_y.reshape(-1, 1)
         y_test = test_y.reshape(-1, 1)
+
+        # Simpan ke session_state
         st.session_state.X_train = X_train
         st.session_state.X_test = X_test
         st.session_state.y_train = y_train
         st.session_state.y_test = y_test
         st.session_state.n_features = n_features
+        st.session_state.n_days = n_days
 
+        st.write(f"📐 Shape X_train: {X_train.shape}")
+        st.write(f"📐 Shape y_train: {y_train.shape}")
+        st.write(f"📐 Shape X_test : {X_test.shape}")
+        st.write(f"📐 Shape y_test : {y_test.shape}")
 
-        st.write("📐 Shape X_train:", X_train.shape)
-        st.write("📐 Shape y_train:", y_train.shape)
-        st.write("📐 Shape X_test :", X_test.shape)
-        st.write("📐 Shape y_test :", y_test.shape)
+        def train_model(model, X_train, y_train, X_test, y_test,
+                        learning_rate=0.001, batch_size=32, epochs=50,
+                        patience=5, filepath='best_model.h5'):
 
-        # ------------------------- MODEL LSTM -------------------------
-        st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
-        
-        # Pastikan variabel tersedia di session_state
-        required_vars = ['X_train', 'X_test', 'y_train', 'y_test', 'n_features']
-        if not all(k in st.session_state for k in required_vars):
-            st.warning("❗ Pastikan Anda sudah melakukan preprocessing dan pembentukan dataset.")
+            def scheduler(epoch, lr):
+                if epoch < 10:
+                    return lr
+                else:
+                    return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
+
+            lr_scheduler = LearningRateScheduler(scheduler)
+            early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+            checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
+
+            with st.spinner("⏳ Model sedang dilatih..."):
+                history = model.fit(X_train, y_train, epochs=epochs,
+                                    batch_size=batch_size,
+                                    validation_data=(X_test, y_test),
+                                    callbacks=[lr_scheduler, early_stopping, checkpointer],
+                                    verbose=0, shuffle=False)
+
+            st.success("✅ Training selesai!")
+            loss, mae = model.evaluate(X_test, y_test, verbose=0)
+            st.metric("MSE (Test Loss)", f"{loss:.5f}")
+            st.metric("MAE (Test MAE)", f"{mae:.5f}")
+
+            fig, ax = plt.subplots()
+            ax.plot(history.history['loss'], label='Training Loss')
+            ax.plot(history.history['val_loss'], label='Validation Loss')
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel('Loss')
+            ax.set_title('Training History')
+            ax.legend()
+            st.pyplot(fig)
+
+            return model
+
+        # Tombol latih Model 1
+        st.subheader("📌 Model 1: LSTM + Flatten + Dense")
+        if st.button("🚀 Latih Model 1"):
+            model1 = Sequential([
+                LSTM(50, return_sequences=True, input_shape=(n_days, n_features)),
+                Dropout(0.3),
+                LSTM(10, return_sequences=False),
+                Dropout(0.3),
+                Flatten(),
+                Dense(64, activation="relu"),
+                Dense(16, activation="relu"),
+                Dense(n_features)
+            ])
+
+            model1.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
+            trained_model1 = train_model(model1, X_train, y_train, X_test, y_test, filepath='best_model1.h5')
+            st.session_state.model1 = trained_model1
+
+        # Tombol latih Model 2
+        st.subheader("📌 Model 2: LSTM Deep")
+        if st.button("🚀 Latih Model 2"):
+            model2 = Sequential([
+                LSTM(200, return_sequences=True, input_shape=(n_days, n_features)),
+                Dropout(0.1),
+                LSTM(100, return_sequences=False),
+                Dropout(0.1),
+                Dense(64, activation="relu"),
+                Dense(n_features)
+            ])
+
+            model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
+            trained_model2 = train_model(model2, X_train, y_train, X_test, y_test, filepath='best_model2.h5')
+            st.session_state.model2 = trained_model2
+
+        # Setelah pelatihan, tampilkan prediksi dan evaluasi dari model terlatih
+        selected_model = st.selectbox("Pilih model untuk evaluasi dan prediksi:",
+                                      ["Model 1", "Model 2"])
+
+        if selected_model == "Model 1" and 'model1' in st.session_state:
+            model = st.session_state.model1
+        elif selected_model == "Model 2" and 'model2' in st.session_state:
+            model = st.session_state.model2
         else:
-            X_train = st.session_state.X_train
-            X_test = st.session_state.X_test
-            y_train = st.session_state.y_train
-            y_test = st.session_state.y_test
-            n_features = st.session_state.n_features
-        
-            def train_model(model, X_train, y_train, X_test, y_test,
-                            learning_rate=0.001, batch_size=32, epochs=100,
-                            patience=3, filepath='best_model.h5'):
-        
-                def scheduler(epoch, lr):
-                    if epoch < 10:
-                        return lr
-                    else:
-                        return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
-        
-                lr_scheduler = LearningRateScheduler(scheduler)
-                early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-                checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
-        
-                with st.spinner("⏳ Model sedang dilatih..."):
-                    history = model.fit(X_train, y_train, epochs=epochs,
-                                        batch_size=batch_size, validation_data=(X_test, y_test),
-                                        callbacks=[lr_scheduler, early_stopping, checkpointer],
-                                        verbose=0, shuffle=False)
-        
-                st.success("✅ Training selesai!")
-                loss, mae = model.evaluate(X_test, y_test, verbose=0)
-                st.metric("MSE (Test Loss)", f"{loss:.5f}")
-                st.metric("MAE (Test MAE)", f"{mae:.5f}")
-        
-                fig, ax = plt.subplots()
-                ax.plot(history.history['loss'], label='Training Loss')
-                ax.plot(history.history['val_loss'], label='Validation Loss')
-                ax.set_xlabel('Epoch')
-                ax.set_ylabel('Loss')
-                ax.set_title('Training History')
+            model = None
+            st.info("Model belum dilatih. Silakan latih model terlebih dahulu.")
+
+        if model is not None:
+            scaler = st.session_state.get('scaler', None)
+            if scaler is None:
+                st.warning("Scaler belum ditemukan. Silakan lakukan preprocessing dulu.")
+            else:
+                y_pred = model.predict(X_test)
+                # inverse transform hasil prediksi dan y_test
+                y_test_inv = scaler.inverse_transform(y_test)
+                y_pred_inv = scaler.inverse_transform(y_pred)
+
+                # Simpan hasil untuk menu prediksi / evaluasi
+                st.session_state.y_test_inv = y_test_inv
+                st.session_state.y_pred_inv = y_pred_inv
+                st.session_state.features = ['FF_X']
+
+                # Plot hasil prediksi vs aktual
+                fig, ax = plt.subplots(figsize=(20, 6))
+                ax.plot(y_test_inv[:, 0], label='Actual', color='blue')
+                ax.plot(y_pred_inv[:, 0], label='Predicted', color='orange')
+                ax.set_title(f'📉 Prediksi vs Aktual untuk FF_X ({selected_model})')
+                ax.set_xlabel('Time')
+                ax.set_ylabel('Kecepatan Angin')
                 ax.legend()
                 st.pyplot(fig)
-        
-                return history, loss
-        
-            st.subheader("📌 Model 1: LSTM + Flatten + Dense")
-            if st.button("🚀 Latih Model 1"):
-                model1 = Sequential()
-                model1.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-                model1.add(Dropout(0.3))
-                model1.add(LSTM(10, return_sequences=False))
-                model1.add(Dropout(0.3))
-                model1.add(Flatten())
-                model1.add(Dense(64, activation="relu"))
-                model1.add(Dense(16, activation="relu"))
-                model1.add(Dense(n_features))
-        
-                model1.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
-                history1, loss1 = train_model(model1, X_train, y_train, X_test, y_test)
-                st.session_state.model1 = model1
 
-                if 'model1' in st.session_state and 'X_test' in st.session_state and 'y_test' in st.session_state and 'scaler' in st.session_state:
-                    model = st.session_state.model1
-                    X_test = st.session_state.X_test
-                    y_test = st.session_state.y_test
-                    scaler = st.session_state.scaler
-            
-                    y_pred = model.predict(X_test)
-                    y_test_inv = scaler.inverse_transform(y_test)
-                    y_pred_inv = scaler.inverse_transform(y_pred)
-            
-                    st.session_state.y_test_inv = y_test_inv
-                    st.session_state.y_pred_inv = y_pred_inv
-                else:
-                    y_test_inv = st.session_state.get('y_test_inv', None)
-                    y_pred_inv = st.session_state.get('y_pred_inv', None)
-            
-                # ======= Setelah itu lanjutkan ke plotting hasil prediksi =======
-                if y_test_inv is not None and y_pred_inv is not None:
-                    features = st.session_state.get('features', ['FF_X'])
-            
-                    fig, ax = plt.subplots(figsize=(20, 6))
-                    ax.plot(y_test_inv[:, 0], label='Actual')
-                    ax.plot(y_pred_inv[:, 0], label='Predicted')
-                    ax.set_title(f'📉 Prediksi vs Aktual untuk {features[0]}')
-                    ax.set_xlabel('Time')
-                    ax.set_ylabel(features[0])
-                    ax.legend()
-                    st.pyplot(fig)
+                # Tabel prediksi
+                df_pred = pd.DataFrame({
+                    'Actual': y_test_inv.flatten(),
+                    'Predicted': np.round(y_pred_inv.flatten(), 3)
+                })
+                st.subheader("🧾 Contoh Tabel Prediksi")
+                st.dataframe(df_pred.head(10))
 
-        
-            st.subheader("📌 Model 2: LSTM Deep")
-            if st.button("🚀 Latih Model 2"):
-                model2 = Sequential()
-                model2.add(LSTM(200, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-                model2.add(Dropout(0.1))
-                model2.add(LSTM(100, return_sequences=False))
-                model2.add(Dropout(0.1))
-                model2.add(Dense(64, activation="relu"))
-                model2.add(Dense(n_features))
-        
-                model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
-                history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
-                st.session_state.model2 = model2
+                # Fungsi evaluasi
+                def calculate_metrics(y_true, y_pred):
+                    mae = mean_absolute_error(y_true, y_pred)
+                    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+                    r2 = r2_score(y_true, y_pred)
+                    mask = y_true != 0
+                    mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100 if np.any(mask) else np.nan
+                    return pd.DataFrame({
+                        'MAE': [mae],
+                        'RMSE': [rmse],
+                        'R2': [r2],
+                        'MAPE (%)': [mape]
+                    })
 
-    if 'features' in st.session_state:
-        features = st.session_state.features
-    else:
-        features = ['FF_X']  # fallback kalau belum disimpan di session_state
-    
-        fig, ax = plt.subplots(figsize=(20, 6))
-        ax.plot(y_test_inv[:, 0], label='Actual')
-        ax.plot(y_pred_inv[:, 0], label='Predicted')
-        ax.set_title(f'📉 Prediksi vs Aktual untuk {features[0]}')
-        ax.set_xlabel('Time')
-        ax.set_ylabel(features[0])
-        ax.legend()
-        st.pyplot(fig)
+                st.subheader("📊 Evaluasi Akurasi Model")
+                df_metrics = calculate_metrics(y_test_inv.flatten(), y_pred_inv.flatten())
+                st.dataframe(df_metrics)
 
-
-
-    # Membuat DataFrame hasil prediksi
-    def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
-        y_true_flat = y_true.flatten()
-        y_pred_flat = np.round(y_pred.flatten(), 3)
-        df_final = pd.DataFrame({
-            f'{feature_name}': y_true_flat,
-            f'{feature_name}_pred': y_pred_flat
-        })
-        return df_final
-
-    df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, features[0])
-    st.subheader("🧾 Contoh Tabel Prediksi")
-    st.dataframe(df_pred.head(10))
-
-    # Fungsi evaluasi
-    def calculate_metrics(y_true, y_pred, feature_name='FF_X'):
-        y_true = y_true.flatten()
-        y_pred = y_pred.flatten()
-
-        mae = mean_absolute_error(y_true, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-        r2 = r2_score(y_true, y_pred)
-
-        mask = y_true != 0
-        if np.any(mask):
-            mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
-        else:
-            mape = np.nan
-
-        metrics = {
-            'feature': [feature_name],
-            'MAE': [mae],
-            'RMSE': [rmse],
-            'R2': [r2],
-            'MAPE': [mape]
-        }
-        return pd.DataFrame(metrics)
-
-    # Tampilkan metrik evaluasi
-    st.subheader("📊 Evaluasi Akurasi Model")
-    df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
-    st.dataframe(df_metrics)
     
 elif menu == "📈 Prediction":
     st.title("📈 Halaman Prediksi")
