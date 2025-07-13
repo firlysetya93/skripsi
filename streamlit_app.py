@@ -454,7 +454,8 @@ else:
     st.subheader("📊 Evaluasi Akurasi Model")
     df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
     st.dataframe(df_metrics)
-elif menu == "📈 Prediction":
+# Menu Prediksi
+if menu == "📈 Prediction":
     st.title("📈 Halaman Prediksi")
 
     # Pastikan semua komponen tersedia
@@ -485,37 +486,14 @@ elif menu == "📈 Prediction":
             st.pyplot(fig)
 
         # Tabel Prediksi
-        def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
-            y_true_flat = y_true.flatten()
-            y_pred_flat = np.round(y_pred.flatten(), 3)
-            return pd.DataFrame({f'{feature_name}': y_true_flat,
-                                 f'{feature_name}_pred': y_pred_flat})
-
-        df_pred = create_predictions_dataframe(inv_true, inv_pred, feature_name=features[0])
         st.subheader("🧾 Tabel Prediksi")
+        df_pred = create_predictions_dataframe(inv_true, inv_pred, features[0])
         st.dataframe(df_pred.head(30))
 
         # Evaluasi Metrik
-        def calculate_metrics(y_true, y_pred, feature_name='FF_X'):
-            y_true = y_true.flatten()
-            y_pred = y_pred.flatten()
-            mae = mean_absolute_error(y_true, y_pred)
-            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-            r2 = r2_score(y_true, y_pred)
-            mask = y_true != 0
-            mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100 if np.any(mask) else np.nan
-            return pd.DataFrame({
-                'Feature': [feature_name],
-                'MAE': [round(mae, 3)],
-                'RMSE': [round(rmse, 3)],
-                'R2 Score': [round(r2, 3)],
-                'MAPE (%)': [round(mape, 2)]
-            })
-
         st.subheader("📊 Evaluasi Akurasi Model")
         df_metrics = calculate_metrics(inv_true, inv_pred, features[0])
         st.dataframe(df_metrics)
 
     else:
         st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
-
