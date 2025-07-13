@@ -328,8 +328,8 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
                                                          filepath='best_model2.h5')
             st.session_state.history2 = history2
 
-    else:
-        st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
+        else:
+            st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
 
 # ========== Prediction ==========
 elif menu == "📈 Prediction":
