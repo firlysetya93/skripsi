@@ -454,7 +454,8 @@ else:
     st.subheader("📊 Evaluasi Akurasi Model")
     df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
     st.dataframe(df_metrics)
-elif menu == "📈 Prediction":
+    
+if menu == "📈 Prediction":
     st.title("📈 Halaman Prediksi")
 
     # Pastikan semua komponen tersedia
