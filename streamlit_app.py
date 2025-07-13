@@ -331,7 +331,7 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         else:
             st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
     
-    # ========== Prediction ==========
-    elif menu == "📈 Prediction":
-        st.title("📈 Halaman Prediksi")
-        st.info("🔧 Fitur ini masih dalam pengembangan.")
+        # ========== Prediction ==========
+        elif menu == "📈 Prediction":
+            st.title("📈 Halaman Prediksi")
+            st.info("🔧 Fitur ini masih dalam pengembangan.")
