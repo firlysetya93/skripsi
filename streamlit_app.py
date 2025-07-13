@@ -10,6 +10,9 @@ from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Flatten
+from tensorflow.keras.optimizers import Adam
 
 st.set_page_config(page_title="🌪️ Aplikasi Prediksi Kecepatan Angin", layout="wide")
 
@@ -199,4 +202,61 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         st.session_state.reframed = reframed
     else:
         st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
+        # ------------------------- TRAIN TEST SPLIT -------------------------
+        st.subheader("🧪 Split Data untuk LSTM")
+
+        # Ambil nilai array dari dataframe hasil reframing
+        values = reframed.values
+
+        # Simpan index tanggal dari hasil reframing
+        date_reframed = df_musim.index[reframed.index]
+
+        # Split manual (tanpa shuffle)
+        train_size = int(len(values) * 0.8)
+        train, test = values[:train_size], values[train_size:]
+
+        # Bagi juga tanggal
+        date_train = date_reframed[:len(train)]
+        date_test = date_reframed[len(train):]
+
+        st.write(f"Jumlah data: {len(values)}")
+        st.write(f"Jumlah train: {len(train)} ({date_train.min().date()} s.d. {date_train.max().date()})")
+        st.write(f"Jumlah test : {len(test)} ({date_test.min().date()} s.d. {date_test.max().date()})")
+
+        # ------------------------- PISAHKAN X dan y -------------------------
+        n_obs = n_days * n_features
+        train_X, train_y = train[:, :n_obs], train[:, -1]
+        test_X, test_y = test[:, :n_obs], test[:, -1]
+
+        # Reshape untuk LSTM
+        X_train = train_X.reshape((train_X.shape[0], n_days, n_features))
+        X_test = test_X.reshape((test_X.shape[0], n_days, n_features))
+        y_train = train_y.reshape(-1, 1)
+        y_test = test_y.reshape(-1, 1)
+
+        st.write("📐 Shape X_train:", X_train.shape)
+        st.write("📐 Shape y_train:", y_train.shape)
+        st.write("📐 Shape X_test :", X_test.shape)
+        st.write("📐 Shape y_test :", y_test.shape)
+
+        # ------------------------- MODEL LSTM -------------------------
+        st.subheader("🧠 Arsitektur Model LSTM")
+
+        model1 = Sequential()
+        model1.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+        model1.add(Dropout(0.3))
+        model1.add(LSTM(10, return_sequences=False))
+        model1.add(Dropout(0.3))
+        model1.add(Flatten())
+        model1.add(Dense(64, activation="relu"))
+        model1.add(Dense(16, activation="relu"))
+        model1.add(Dense(n_features))
+
+        optimizer = Adam(learning_rate=0.001)
+        model1.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
+
+        # Tampilkan summary
+        with st.expander("📋 LSTM Model Summary"):
+            st.text(model1.summary())
+
 
