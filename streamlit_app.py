@@ -146,11 +146,7 @@ elif menu == "⚙️ Preprocessing":
 """)
     else:
         st.warning("❗ Silakan upload file terlebih dahulu.")
-# Tambahkan ini di awal file kalau belum ada
-from sklearn.preprocessing import MinMaxScaler
-import numpy as np
-
-# Tambahkan ini ke dalam bagian menu
+# ========== MODELING ==========
 elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
     st.title("🧠 Transformasi Supervised Learning (Lag Feature)")
 
@@ -201,8 +197,6 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
 
         # Simpan ke session state jika ingin digunakan selanjutnya
         st.session_state.reframed = reframed
-    else:
-    st.warning("❗ Silakan upload file terlebih dahulu.")
     else:
         st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
 
