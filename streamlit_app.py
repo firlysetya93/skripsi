@@ -468,13 +468,20 @@ elif menu == "📈 Prediction":
         # Simpan hasil ke session_state
         st.session_state.y_pred_inv = inv_pred
         st.session_state.y_test_inv = inv_true
-        st.session_state.features = ['FF_X']  # Ubah sesuai fitur aslinya jika lebih dari satu
+        st.session_state.features = ['FF_X']  # ganti jika punya lebih dari 1 fitur
 
-        # Visualisasi dan evaluasi
-        features = st.session_state.features
+        # Ambil dari session_state
         y_test_inv = st.session_state.y_test_inv
         y_pred_inv = st.session_state.y_pred_inv
+        features = st.session_state.features
 
+        # Cek dan ubah ke 2D jika hanya 1 fitur
+        if y_test_inv.ndim == 1:
+            y_test_inv = y_test_inv.reshape(-1, 1)
+        if y_pred_inv.ndim == 1:
+            y_pred_inv = y_pred_inv.reshape(-1, 1)
+
+        # Visualisasi Prediksi vs Aktual
         st.subheader("📉 Prediksi vs Aktual")
         for i in range(len(features)):
             fig, ax = plt.subplots(figsize=(20, 6))
@@ -496,18 +503,20 @@ elif menu == "📈 Prediction":
             })
 
         df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, features[0])
-        st.subheader("🧾 Tabel Prediksi")
-        st.dataframe(df_pred.head(30))
+        st.subheader("🧾 Contoh Tabel Prediksi")
+        st.dataframe(df_pred.head(10))
 
         # Evaluasi
         def calculate_metrics(y_true, y_pred, feature_name='FF_X'):
             y_true = y_true.flatten()
             y_pred = y_pred.flatten()
+
             mae = mean_absolute_error(y_true, y_pred)
             rmse = np.sqrt(mean_squared_error(y_true, y_pred))
             r2 = r2_score(y_true, y_pred)
             mask = y_true != 0
             mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100 if np.any(mask) else np.nan
+
             return pd.DataFrame({
                 'Feature': [feature_name],
                 'MAE': [round(mae, 3)],
@@ -521,5 +530,4 @@ elif menu == "📈 Prediction":
         st.dataframe(df_metrics)
 
     else:
-        st.warning("❗ Harap jalankan pelatihan dan tuning model terlebih dahulu.")
-
+        st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
