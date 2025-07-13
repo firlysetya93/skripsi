@@ -13,13 +13,13 @@ from sklearn.model_selection import train_test_split
 st.set_page_config(page_title="🌪️ Aplikasi Prediksi Kecepatan Angin", layout="wide")
 
 # Sidebar
-menu = st.sidebar.selectbox("Navigasi Menu", [
-    "🏠 Home",
-    "📤 Upload Data",
-    "📊 EDA",
+menu = st.sidebar.selectbox("📂 Menu", [
     "⚙️ Preprocessing",
-    "🧠 Modeling (LSTM / TCN / RBFNN)",
-    "📈 Prediction"
+    "📊 Visualisasi Data",
+    "🧠 Modeling",
+    "🔧 Hyperparameter Tuning",
+    "🏋️ Final Training",
+    "📈 Evaluasi"
 ])
 
 uploaded_file = st.sidebar.file_uploader("Upload file Excel (.xlsx)", type=["xlsx"])
@@ -581,3 +581,4 @@ if st.button("🚀 Latih Model dengan Hyperparameter Terbaik"):
 
         st.subheader("📊 Evaluasi Akurasi Model")
         st.dataframe(df_metrics)
+        
