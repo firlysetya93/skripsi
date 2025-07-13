@@ -10,6 +10,7 @@ from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
 
 st.set_page_config(page_title="🌪️ Aplikasi Prediksi Kecepatan Angin", layout="wide")
 
