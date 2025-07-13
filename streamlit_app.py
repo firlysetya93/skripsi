@@ -481,24 +481,22 @@ elif menu == "📈 Prediction":
         y_test = st.session_state.y_test
         scaler = st.session_state.scaler
 
-        # Prediksi dan inverse transform
         y_pred = model.predict(X_test)
-        inv_pred = scaler.inverse_transform(y_pred)
-        inv_true = scaler.inverse_transform(y_test)
+        y_pred_inv = scaler.inverse_transform(y_pred)
+        y_test_inv = scaler.inverse_transform(y_test)
 
-        st.session_state.y_pred_inv = inv_pred
-        st.session_state.y_test_inv = inv_true
+        st.session_state.y_pred_inv = y_pred_inv
+        st.session_state.y_test_inv = y_test_inv
         st.session_state.features = ['FF_X']
-
-        y_test_inv = inv_true
-        y_pred_inv = inv_pred
-        features = st.session_state.features
 
         if y_test_inv.ndim == 1:
             y_test_inv = y_test_inv.reshape(-1, 1)
         if y_pred_inv.ndim == 1:
             y_pred_inv = y_pred_inv.reshape(-1, 1)
 
+        features = st.session_state.features
+
+        # Visualisasi Prediksi
         st.subheader("📉 Prediksi vs Aktual")
         for i in range(len(features)):
             fig, ax = plt.subplots(figsize=(20, 6))
@@ -510,16 +508,20 @@ elif menu == "📈 Prediction":
             ax.legend()
             st.pyplot(fig)
 
+        # Tabel Prediksi
         def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
+            y_true_flat = y_true.flatten()
+            y_pred_flat = np.round(y_pred.flatten(), 3)
             return pd.DataFrame({
-                f'{feature_name}': y_true.flatten(),
-                f'{feature_name}_pred': np.round(y_pred.flatten(), 3)
+                f'{feature_name}': y_true_flat,
+                f'{feature_name}_pred': y_pred_flat
             })
 
         df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, features[0])
         st.subheader("🧾 Contoh Tabel Prediksi")
         st.dataframe(df_pred.head(10))
 
+        # Evaluasi
         def calculate_metrics(y_true, y_pred, feature_name='FF_X'):
             y_true = y_true.flatten()
             y_pred = y_pred.flatten()
@@ -539,7 +541,6 @@ elif menu == "📈 Prediction":
         st.subheader("📊 Evaluasi Akurasi Model")
         df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
         st.dataframe(df_metrics)
-
     else:
         st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
 
