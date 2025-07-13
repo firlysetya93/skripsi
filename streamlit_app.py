@@ -455,81 +455,81 @@ else:
     df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
     st.dataframe(df_metrics)
 
-# ========== Menu Prediction ==========
-elif menu == "📈 Prediction":
-    st.title("📈 Halaman Prediksi")
-
-    if all(k in st.session_state for k in ['tuned_model', 'X_test', 'y_test', 'scaler', 'features']):
-        tuned_model = st.session_state.tuned_model
-        X_test = st.session_state.X_test
-        y_test = st.session_state.y_test
-        scaler = st.session_state.scaler
-        features = st.session_state.features
-
-        y_pred = tuned_model.predict(X_test)
-
-        def inverse_transform_and_plot(y_true, y_pred, scaler, features):
-            inv_pred = scaler.inverse_transform(y_pred)
-            inv_true = scaler.inverse_transform(y_true)
-
-            for i in range(len(features)):
-                fig, ax = plt.subplots(figsize=(20, 6))
-                ax.plot(inv_true[:, i], label='Actual')
-                ax.plot(inv_pred[:, i], label='Predicted')
-                ax.set_title(f'Actual vs Predicted for {features[i]}')
-                ax.set_xlabel('Time')
-                ax.set_ylabel(features[i])
-                ax.legend()
-                st.pyplot(fig)
-
-            return inv_true, inv_pred
-
-        def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
-            y_true_flat = y_true.flatten()
-            y_pred_flat = np.round(y_pred.flatten(), 3)
-            df_final = pd.DataFrame({
-                f'{feature_name}': y_true_flat,
-                f'{feature_name}_pred': y_pred_flat
-            })
-            return df_final
-
-        def calculate_metrics(y_true, y_pred, features):
-            metrics = {
-                'Feature': [],
-                'MAE': [],
-                'R2 Score': [],
-                'RMSE': [],
-                'MAPE (%)': []
-            }
-
-            for i, feature in enumerate(features):
-                actual = y_true[:, i].flatten()
-                predicted = y_pred[:, i].flatten()
-
-                mae = mean_absolute_error(actual, predicted)
-                r2 = r2_score(actual, predicted)
-                rmse = np.sqrt(mean_squared_error(actual, predicted))
-                mape = np.mean(np.abs((actual - predicted) / actual)) * 100
-
-                metrics['Feature'].append(feature)
-                metrics['MAE'].append(round(mae, 3))
-                metrics['R2 Score'].append(round(r2, 3))
-                metrics['RMSE'].append(round(rmse, 3))
-                metrics['MAPE (%)'].append(round(mape, 2))
-
-            return pd.DataFrame(metrics)
-
-        y_test_inverse, y_pred_inverse = inverse_transform_and_plot(y_test, y_pred, scaler, features)
-
-        df_pred = create_predictions_dataframe(y_test_inverse, y_pred_inverse, feature_name=features[0])
-        st.subheader("📋 Tabel Prediksi vs Aktual")
-        st.dataframe(df_pred.head(30))
-
-        st.subheader("📊 Evaluasi Akurasi Model")
-        df_metrics = calculate_metrics(y_test_inverse, y_pred_inverse, features)
-        st.dataframe(df_metrics)
-
-    else:
-        st.warning("❗ Pastikan Anda telah menjalankan pelatihan model terlebih dahulu.")
-
+        # ========== Menu Prediction ==========
+        elif menu == "📈 Prediction":
+            st.title("📈 Halaman Prediksi")
         
+            if all(k in st.session_state for k in ['tuned_model', 'X_test', 'y_test', 'scaler', 'features']):
+                tuned_model = st.session_state.tuned_model
+                X_test = st.session_state.X_test
+                y_test = st.session_state.y_test
+                scaler = st.session_state.scaler
+                features = st.session_state.features
+        
+                y_pred = tuned_model.predict(X_test)
+        
+                def inverse_transform_and_plot(y_true, y_pred, scaler, features):
+                    inv_pred = scaler.inverse_transform(y_pred)
+                    inv_true = scaler.inverse_transform(y_true)
+        
+                    for i in range(len(features)):
+                        fig, ax = plt.subplots(figsize=(20, 6))
+                        ax.plot(inv_true[:, i], label='Actual')
+                        ax.plot(inv_pred[:, i], label='Predicted')
+                        ax.set_title(f'Actual vs Predicted for {features[i]}')
+                        ax.set_xlabel('Time')
+                        ax.set_ylabel(features[i])
+                        ax.legend()
+                        st.pyplot(fig)
+        
+                    return inv_true, inv_pred
+        
+                def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
+                    y_true_flat = y_true.flatten()
+                    y_pred_flat = np.round(y_pred.flatten(), 3)
+                    df_final = pd.DataFrame({
+                        f'{feature_name}': y_true_flat,
+                        f'{feature_name}_pred': y_pred_flat
+                    })
+                    return df_final
+        
+                def calculate_metrics(y_true, y_pred, features):
+                    metrics = {
+                        'Feature': [],
+                        'MAE': [],
+                        'R2 Score': [],
+                        'RMSE': [],
+                        'MAPE (%)': []
+                    }
+        
+                    for i, feature in enumerate(features):
+                        actual = y_true[:, i].flatten()
+                        predicted = y_pred[:, i].flatten()
+        
+                        mae = mean_absolute_error(actual, predicted)
+                        r2 = r2_score(actual, predicted)
+                        rmse = np.sqrt(mean_squared_error(actual, predicted))
+                        mape = np.mean(np.abs((actual - predicted) / actual)) * 100
+        
+                        metrics['Feature'].append(feature)
+                        metrics['MAE'].append(round(mae, 3))
+                        metrics['R2 Score'].append(round(r2, 3))
+                        metrics['RMSE'].append(round(rmse, 3))
+                        metrics['MAPE (%)'].append(round(mape, 2))
+        
+                    return pd.DataFrame(metrics)
+        
+                y_test_inverse, y_pred_inverse = inverse_transform_and_plot(y_test, y_pred, scaler, features)
+        
+                df_pred = create_predictions_dataframe(y_test_inverse, y_pred_inverse, feature_name=features[0])
+                st.subheader("📋 Tabel Prediksi vs Aktual")
+                st.dataframe(df_pred.head(30))
+        
+                st.subheader("📊 Evaluasi Akurasi Model")
+                df_metrics = calculate_metrics(y_test_inverse, y_pred_inverse, features)
+                st.dataframe(df_metrics)
+        
+            else:
+                st.warning("❗ Pastikan Anda telah menjalankan pelatihan model terlebih dahulu.")
+        
+                
