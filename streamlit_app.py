@@ -313,8 +313,57 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         st.write("📐 Shape y_test :", y_test.shape)
 
         # ------------------------- MODEL LSTM -------------------------
-        st.subheader("🧠 Arsitektur Model LSTM")
+ st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
 
+# Pastikan variabel tersedia di session_state
+required_vars = ['X_train', 'X_test', 'y_train', 'y_test', 'n_features']
+if not all(k in st.session_state for k in required_vars):
+    st.warning("❗ Pastikan Anda sudah melakukan preprocessing dan pembentukan dataset.")
+else:
+    X_train = st.session_state.X_train
+    X_test = st.session_state.X_test
+    y_train = st.session_state.y_train
+    y_test = st.session_state.y_test
+    n_features = st.session_state.n_features
+
+    def train_model(model, X_train, y_train, X_test, y_test,
+                    learning_rate=0.001, batch_size=32, epochs=100,
+                    patience=3, filepath='best_model.h5'):
+
+        def scheduler(epoch, lr):
+            if epoch < 10:
+                return lr
+            else:
+                return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
+
+        lr_scheduler = LearningRateScheduler(scheduler)
+        early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+        checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
+
+        with st.spinner("⏳ Model sedang dilatih..."):
+            history = model.fit(X_train, y_train, epochs=epochs,
+                                batch_size=batch_size, validation_data=(X_test, y_test),
+                                callbacks=[lr_scheduler, early_stopping, checkpointer],
+                                verbose=0, shuffle=False)
+
+        st.success("✅ Training selesai!")
+        loss, mae = model.evaluate(X_test, y_test, verbose=0)
+        st.metric("MSE (Test Loss)", f"{loss:.5f}")
+        st.metric("MAE (Test MAE)", f"{mae:.5f}")
+
+        fig, ax = plt.subplots()
+        ax.plot(history.history['loss'], label='Training Loss')
+        ax.plot(history.history['val_loss'], label='Validation Loss')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Loss')
+        ax.set_title('Training History')
+        ax.legend()
+        st.pyplot(fig)
+
+        return history, loss
+
+    st.subheader("📌 Model 1: LSTM + Flatten + Dense")
+    if st.button("🚀 Latih Model 1"):
         model1 = Sequential()
         model1.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
         model1.add(Dropout(0.3))
@@ -325,65 +374,12 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         model1.add(Dense(16, activation="relu"))
         model1.add(Dense(n_features))
 
-        optimizer = Adam(learning_rate=0.001)
-        model1.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
+        model1.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
+        history1, loss1 = train_model(model1, X_train, y_train, X_test, y_test)
+        st.session_state.model1 = model1
 
-        # Tampilkan summary
-        with st.expander("📋 LSTM Model Summary"):
-            st.text(model1.summary())
-            # ------------------------- TRAINING DENGAN CALLBACK -------------------------
-        st.subheader("🏋️ Training dengan Scheduler & Checkpoint")
-
-        def train_model_streamlit(model, X_train, y_train, X_test, y_test,
-                                  learning_rate=0.001, batch_size=32, epochs=50,
-                                  patience=5, filepath='best_model.h5'):
-            # Scheduler untuk learning rate
-            def scheduler(epoch, lr):
-                if epoch < 10:
-                    return lr
-                else:
-                    return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
-
-            lr_scheduler = LearningRateScheduler(scheduler)
-            early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-            checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
-
-            # Training
-            with st.spinner("⏳ Model sedang dilatih..."):
-                history = model.fit(X_train, y_train,
-                                    epochs=epochs,
-                                    batch_size=batch_size,
-                                    validation_data=(X_test, y_test),
-                                    callbacks=[lr_scheduler, early_stopping, checkpointer],
-                                    verbose=0,
-                                    shuffle=False)
-
-            st.success("✅ Training selesai!")
-
-            # Evaluasi
-            loss, mae = model.evaluate(X_test, y_test, verbose=0)
-            st.metric("MSE (Test Loss)", f"{loss:.5f}")
-            st.metric("MAE (Test MAE)", f"{mae:.5f}")
-
-            # Plot history
-            fig, ax = plt.subplots()
-            ax.plot(history.history['loss'], label='Training Loss')
-            ax.plot(history.history['val_loss'], label='Validation Loss')
-            ax.set_xlabel('Epoch')
-            ax.set_ylabel('Loss')
-            ax.set_title('Training History')
-            ax.legend()
-            st.pyplot(fig)
-
-            return history, loss
-
-        # Tombol untuk mulai training
-        if st.button("🚀 Mulai Training (dengan Scheduler & Checkpoint)"):
-            history1, test_loss1 = train_model_streamlit(model1, X_train, y_train, X_test, y_test)
-            st.session_state.history1 = history1
-        # ==================== MODEL 2 ====================
-        st.subheader("🧠 Model LSTM Deep")
-
+    st.subheader("📌 Model 2: LSTM Deep")
+    if st.button("🚀 Latih Model 2"):
         model2 = Sequential()
         model2.add(LSTM(200, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
         model2.add(Dropout(0.1))
@@ -392,93 +388,7 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         model2.add(Dense(64, activation="relu"))
         model2.add(Dense(n_features))
 
-        optimizer2 = Adam(learning_rate=0.0001)
-        model2.compile(optimizer=optimizer2, loss='mse', metrics=['mae'])
-
-        with st.expander("📋 Ringkasan Model 2"):
-            model2.summary(print_fn=lambda x: st.text(x))
-
-        if st.button("🚀 Mulai Training Model 2"):
-            history2, test_loss2 = train_model_streamlit(model2, X_train, y_train, X_test, y_test,
-                                                         learning_rate=0.0001,
-                                                         filepath='best_model2.h5')
-            st.session_state.history2 = history2
-
-        else:
-            st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
-
-# ========== Prediction ==========
-elif menu == "📈 Prediction":
-    st.title("📈 Halaman Prediksi")
-    st.info("🔧 Fitur ini masih dalam pengembangan.")
-elif menu == "🔧 Hyperparameter Tuning":
-    st.title("🔧 Tuning Hyperparameter LSTM dengan Optuna")
-
-    if 'X_train' in st.session_state and 'X_test' in st.session_state:
-        X_train = st.session_state.X_train
-        X_test = st.session_state.X_test
-        y_train = st.session_state.y_train
-        y_test = st.session_state.y_test
-        n_features = X_train.shape[2]
-
-        st.markdown("Klik tombol di bawah untuk menjalankan proses **tuning LSTM** dengan Optuna:")
-        
-        if st.button("🚀 Mulai Tuning Hyperparameter"):
-            with st.spinner("⏳ Sedang melakukan tuning..."):
-
-                import optuna
-                from tensorflow.keras.models import Sequential
-                from tensorflow.keras.layers import LSTM, Dense, Dropout
-                from tensorflow.keras.optimizers import Adam
-                from tensorflow.keras.callbacks import EarlyStopping
-
-                def objective(trial):
-                    lstm_units = trial.suggest_int('lstm_units', 10, 200)
-                    dense_units = trial.suggest_int('dense_units', 10, 200)
-                    dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
-                    recurrent_dropout_rate = trial.suggest_float('recurrent_dropout_rate', 0.0, 0.5)
-                    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
-                    epochs = trial.suggest_int('epochs', 20, 100)
-                    batch_size = trial.suggest_int('batch_size', 16, 128)
-
-                    # Define model
-                    model = Sequential()
-                    model.add(LSTM(lstm_units, activation='relu',
-                                   dropout=dropout_rate,
-                                   recurrent_dropout=recurrent_dropout_rate,
-                                   return_sequences=True,
-                                   input_shape=(X_train.shape[1], X_train.shape[2])))
-                    model.add(Dropout(dropout_rate))
-                    model.add(LSTM(lstm_units, activation='relu',
-                                   dropout=dropout_rate,
-                                   recurrent_dropout=recurrent_dropout_rate))
-                    model.add(Dropout(dropout_rate))
-                    model.add(Dense(dense_units, activation='relu'))
-                    model.add(Dense(n_features))
-
-                    optimizer = Adam(learning_rate=learning_rate)
-                    model.compile(optimizer=optimizer, loss='mean_squared_error')
-
-                    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-
-                    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-                              validation_data=(X_test, y_test), callbacks=[early_stopping],
-                              verbose=0, shuffle=False)
-
-                    loss = model.evaluate(X_test, y_test, verbose=0)
-                    return loss
-
-                study = optuna.create_study(direction='minimize')
-                study.optimize(objective, n_trials=30)
-
-                st.success("✅ Tuning selesai!")
-                st.write("### 🔍 Best Hyperparameters")
-                for key, val in study.best_params.items():
-                    st.write(f"- **{key}**: `{val}`")
-
-                # Simpan ke session_state
-                st.session_state.best_params = study.best_params
-
-    else:
-        st.warning("❗ Harap jalankan proses 'Modeling' terlebih dahulu agar X_train, X_test, y_train tersedia.")
+        model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
+        history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
+        st.session_state.model2 = model2
 
