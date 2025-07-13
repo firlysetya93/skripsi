@@ -349,13 +349,6 @@ elif menu == "🔧 Hyperparameter Tuning":
         
         if st.button("🚀 Mulai Tuning Hyperparameter"):
             with st.spinner("⏳ Sedang melakukan tuning..."):
-
-                import optuna
-                from tensorflow.keras.models import Sequential
-                from tensorflow.keras.layers import LSTM, Dense, Dropout
-                from tensorflow.keras.optimizers import Adam
-                from tensorflow.keras.callbacks import EarlyStopping
-
                 def objective(trial):
                     lstm_units = trial.suggest_int('lstm_units', 10, 200)
                     dense_units = trial.suggest_int('dense_units', 10, 200)
@@ -408,47 +401,70 @@ elif menu == "🔧 Hyperparameter Tuning":
     # ========== Final Training dengan Hyperparameter Terbaik ==========
 st.subheader("🏋️ Final Training dengan Hyperparameter Terbaik")
 
-if st.button("🚀 Latih Model dengan Hyperparameter Terbaik"):
+# Pastikan semua variabel penting tersedia di session_state
+required_vars = ['X_train', 'X_test', 'y_train', 'y_test', 'n_features', 'best_params']
+if not all(k in st.session_state for k in required_vars):
+    st.warning("❗ Pastikan Anda sudah melakukan preprocessing, modeling, dan tuning Optuna.")
+else:
+    # Ambil variabel dari session_state
+    X_train = st.session_state.X_train
+    X_test = st.session_state.X_test
+    y_train = st.session_state.y_train
+    y_test = st.session_state.y_test
+    n_features = st.session_state.n_features
     best_params = st.session_state.best_params
 
-    tuned_model = Sequential()
-    tuned_model.add(LSTM(best_params['lstm_units'], activation='relu',
-                         dropout=best_params['dropout_rate'],
-                         recurrent_dropout=best_params['recurrent_dropout_rate'],
-                         return_sequences=True,
-                         input_shape=(X_train.shape[1], X_train.shape[2])))
-    tuned_model.add(Dropout(best_params['dropout_rate']))
-    tuned_model.add(LSTM(best_params['lstm_units'], activation='relu',
-                         dropout=best_params['dropout_rate'],
-                         recurrent_dropout=best_params['recurrent_dropout_rate']))
-    tuned_model.add(Dropout(best_params['dropout_rate']))
-    tuned_model.add(Dense(best_params['dense_units'], activation='relu'))
-    tuned_model.add(Dense(n_features))
+    # Tombol untuk memulai training
+    if st.button("🚀 Mulai Final Training Model"):
+        # Bangun model
+        model = Sequential()
+        model.add(LSTM(best_params['lstm_units'], activation='relu',
+                       dropout=best_params['dropout_rate'],
+                       recurrent_dropout=best_params['recurrent_dropout_rate'],
+                       return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+        model.add(Dropout(best_params['dropout_rate']))
+        model.add(LSTM(best_params['lstm_units'], activation='relu',
+                       dropout=best_params['dropout_rate'],
+                       recurrent_dropout=best_params['recurrent_dropout_rate']))
+        model.add(Dropout(best_params['dropout_rate']))
+        model.add(Dense(best_params['dense_units'], activation='relu'))
+        model.add(Dense(n_features))
 
-    optimizer = Adam(learning_rate=best_params['learning_rate'])
-    tuned_model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
+        optimizer = Adam(learning_rate=best_params['learning_rate'])
+        model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
 
-    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
-    with st.spinner("🔁 Sedang melatih model..."):
-        history = tuned_model.fit(X_train, y_train,
-                                  epochs=best_params['epochs'],
-                                  batch_size=best_params['batch_size'],
-                                  validation_data=(X_test, y_test),
-                                  callbacks=[early_stopping],
-                                  shuffle=False,
-                                  verbose=0)
+        # Train the model
+        with st.spinner("🔁 Sedang melatih model..."):
+            history = model.fit(X_train, y_train,
+                                epochs=best_params['epochs'],
+                                batch_size=best_params['batch_size'],
+                                validation_data=(X_test, y_test),
+                                callbacks=[early_stopping],
+                                shuffle=False,
+                                verbose=0)
+
         st.success("✅ Pelatihan selesai!")
 
-    # Plot training history
-    fig, ax = plt.subplots()
-    ax.plot(history.history['loss'], label='Training Loss')
-    ax.plot(history.history['val_loss'], label='Validation Loss')
-    ax.set_xlabel('Epochs')
-    ax.set_ylabel('Loss')
-    ax.set_title('Training History (Best Hyperparameter)')
-    ax.legend()
-    st.pyplot(fig)
+        # Simpan model dan history ke session_state
+        st.session_state.tuned_model = model
+        st.session_state.history = history
+
+        # Evaluasi
+        loss, mae = model.evaluate(X_test, y_test, verbose=0)
+        st.metric("MSE (Loss)", f"{loss:.5f}")
+        st.metric("MAE", f"{mae:.5f}")
+
+        # Plot training history
+        fig, ax = plt.subplots()
+        ax.plot(history.history['loss'], label='Training Loss')
+        ax.plot(history.history['val_loss'], label='Validation Loss')
+        ax.set_xlabel('Epochs')
+        ax.set_ylabel('Loss')
+        ax.set_title('Training History')
+        ax.legend()
+        st.pyplot(fig)
 
     # --- Prediksi ---
     y_pred = tuned_model.predict(X_test)
