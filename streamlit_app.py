@@ -397,14 +397,33 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
     else:
         features = ['FF_X']  # fallback kalau belum disimpan di session_state
     
-        fig, ax = plt.subplots(figsize=(20, 6))
-        ax.plot(y_test_inv[:, 0], label='Actual')
-        ax.plot(y_pred_inv[:, 0], label='Predicted')
-        ax.set_title(f'📉 Prediksi vs Aktual untuk {features[0]}')
-        ax.set_xlabel('Time')
-        ax.set_ylabel(features[0])
-        ax.legend()
-        st.pyplot(fig)
+        # Pastikan hanya dijalankan jika sudah ada hasil prediksi
+if 'y_test_inv' in st.session_state and 'y_pred_inv' in st.session_state:
+    y_test_inv = st.session_state.y_test_inv
+    y_pred_inv = st.session_state.y_pred_inv
+    features = st.session_state.get('features', ['FF_X'])
+
+    fig, ax = plt.subplots(figsize=(20, 6))
+    ax.plot(y_test_inv[:, 0], label='Actual')
+    ax.plot(y_pred_inv[:, 0], label='Predicted')
+    ax.set_title(f'📉 Prediksi vs Aktual untuk {features[0]}')
+    ax.set_xlabel('Time')
+    ax.set_ylabel(features[0])
+    ax.legend()
+    st.pyplot(fig)
+
+    # Buat tabel prediksi
+    df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, features[0])
+    st.subheader("🧾 Contoh Tabel Prediksi")
+    st.dataframe(df_pred.head(10))
+
+    # Evaluasi metrik
+    st.subheader("📊 Evaluasi Akurasi Model")
+    df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
+    st.dataframe(df_metrics)
+else:
+    st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu di menu 📈 Prediction.")
+
 
 
 
