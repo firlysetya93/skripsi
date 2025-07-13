@@ -409,7 +409,20 @@ elif menu == "🔧 Hyperparameter Tuning":
 st.subheader("🏋️ Final Training dengan Hyperparameter Terbaik")
 
 if st.button("🚀 Latih Model dengan Hyperparameter Terbaik"):
-    best_params = st.session_state.best_params
+    if 'best_params' not in st.session_state:
+        st.error("❗ Hyperparameter belum tersedia. Harap jalankan proses tuning Optuna terlebih dahulu.")
+    elif not all(k in st.session_state for k in ['X_train', 'X_test', 'y_train', 'y_test', 'scaler']):
+        st.error("❗ Data latih dan scaler belum tersedia. Silakan lakukan preprocessing dan modeling terlebih dahulu.")
+    else:
+        best_params = st.session_state.best_params
+        X_train = st.session_state.X_train
+        X_test = st.session_state.X_test
+        y_train = st.session_state.y_train
+        y_test = st.session_state.y_test
+        scaler = st.session_state.scaler
+        features = ['FF_X']  # atau sesuaikan
+
+        # (lanjutkan dengan training seperti sebelumnya...)
 
     tuned_model = Sequential()
     tuned_model.add(LSTM(best_params['lstm_units'], activation='relu',
