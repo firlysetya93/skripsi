@@ -313,82 +313,82 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         st.write("📐 Shape y_test :", y_test.shape)
 
         # ------------------------- MODEL LSTM -------------------------
-     st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
-    
-    # Pastikan variabel tersedia di session_state
-    required_vars = ['X_train', 'X_test', 'y_train', 'y_test', 'n_features']
-    if not all(k in st.session_state for k in required_vars):
-        st.warning("❗ Pastikan Anda sudah melakukan preprocessing dan pembentukan dataset.")
-    else:
-        X_train = st.session_state.X_train
-        X_test = st.session_state.X_test
-        y_train = st.session_state.y_train
-        y_test = st.session_state.y_test
-        n_features = st.session_state.n_features
-    
-        def train_model(model, X_train, y_train, X_test, y_test,
-                        learning_rate=0.001, batch_size=32, epochs=100,
-                        patience=3, filepath='best_model.h5'):
-    
-            def scheduler(epoch, lr):
-                if epoch < 10:
-                    return lr
-                else:
-                    return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
-    
-            lr_scheduler = LearningRateScheduler(scheduler)
-            early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-            checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
-    
-            with st.spinner("⏳ Model sedang dilatih..."):
-                history = model.fit(X_train, y_train, epochs=epochs,
-                                    batch_size=batch_size, validation_data=(X_test, y_test),
-                                    callbacks=[lr_scheduler, early_stopping, checkpointer],
-                                    verbose=0, shuffle=False)
-    
-            st.success("✅ Training selesai!")
-            loss, mae = model.evaluate(X_test, y_test, verbose=0)
-            st.metric("MSE (Test Loss)", f"{loss:.5f}")
-            st.metric("MAE (Test MAE)", f"{mae:.5f}")
-    
-            fig, ax = plt.subplots()
-            ax.plot(history.history['loss'], label='Training Loss')
-            ax.plot(history.history['val_loss'], label='Validation Loss')
-            ax.set_xlabel('Epoch')
-            ax.set_ylabel('Loss')
-            ax.set_title('Training History')
-            ax.legend()
-            st.pyplot(fig)
-    
-            return history, loss
-    
-        st.subheader("📌 Model 1: LSTM + Flatten + Dense")
-        if st.button("🚀 Latih Model 1"):
-            model1 = Sequential()
-            model1.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-            model1.add(Dropout(0.3))
-            model1.add(LSTM(10, return_sequences=False))
-            model1.add(Dropout(0.3))
-            model1.add(Flatten())
-            model1.add(Dense(64, activation="relu"))
-            model1.add(Dense(16, activation="relu"))
-            model1.add(Dense(n_features))
-    
-            model1.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
-            history1, loss1 = train_model(model1, X_train, y_train, X_test, y_test)
-            st.session_state.model1 = model1
-    
-        st.subheader("📌 Model 2: LSTM Deep")
-        if st.button("🚀 Latih Model 2"):
-            model2 = Sequential()
-            model2.add(LSTM(200, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-            model2.add(Dropout(0.1))
-            model2.add(LSTM(100, return_sequences=False))
-            model2.add(Dropout(0.1))
-            model2.add(Dense(64, activation="relu"))
-            model2.add(Dense(n_features))
-    
-            model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
-            history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
-            st.session_state.model2 = model2
-    
+         st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
+        
+        # Pastikan variabel tersedia di session_state
+        required_vars = ['X_train', 'X_test', 'y_train', 'y_test', 'n_features']
+        if not all(k in st.session_state for k in required_vars):
+            st.warning("❗ Pastikan Anda sudah melakukan preprocessing dan pembentukan dataset.")
+        else:
+            X_train = st.session_state.X_train
+            X_test = st.session_state.X_test
+            y_train = st.session_state.y_train
+            y_test = st.session_state.y_test
+            n_features = st.session_state.n_features
+        
+            def train_model(model, X_train, y_train, X_test, y_test,
+                            learning_rate=0.001, batch_size=32, epochs=100,
+                            patience=3, filepath='best_model.h5'):
+        
+                def scheduler(epoch, lr):
+                    if epoch < 10:
+                        return lr
+                    else:
+                        return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
+        
+                lr_scheduler = LearningRateScheduler(scheduler)
+                early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
+                checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
+        
+                with st.spinner("⏳ Model sedang dilatih..."):
+                    history = model.fit(X_train, y_train, epochs=epochs,
+                                        batch_size=batch_size, validation_data=(X_test, y_test),
+                                        callbacks=[lr_scheduler, early_stopping, checkpointer],
+                                        verbose=0, shuffle=False)
+        
+                st.success("✅ Training selesai!")
+                loss, mae = model.evaluate(X_test, y_test, verbose=0)
+                st.metric("MSE (Test Loss)", f"{loss:.5f}")
+                st.metric("MAE (Test MAE)", f"{mae:.5f}")
+        
+                fig, ax = plt.subplots()
+                ax.plot(history.history['loss'], label='Training Loss')
+                ax.plot(history.history['val_loss'], label='Validation Loss')
+                ax.set_xlabel('Epoch')
+                ax.set_ylabel('Loss')
+                ax.set_title('Training History')
+                ax.legend()
+                st.pyplot(fig)
+        
+                return history, loss
+        
+            st.subheader("📌 Model 1: LSTM + Flatten + Dense")
+            if st.button("🚀 Latih Model 1"):
+                model1 = Sequential()
+                model1.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+                model1.add(Dropout(0.3))
+                model1.add(LSTM(10, return_sequences=False))
+                model1.add(Dropout(0.3))
+                model1.add(Flatten())
+                model1.add(Dense(64, activation="relu"))
+                model1.add(Dense(16, activation="relu"))
+                model1.add(Dense(n_features))
+        
+                model1.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
+                history1, loss1 = train_model(model1, X_train, y_train, X_test, y_test)
+                st.session_state.model1 = model1
+        
+            st.subheader("📌 Model 2: LSTM Deep")
+            if st.button("🚀 Latih Model 2"):
+                model2 = Sequential()
+                model2.add(LSTM(200, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+                model2.add(Dropout(0.1))
+                model2.add(LSTM(100, return_sequences=False))
+                model2.add(Dropout(0.1))
+                model2.add(Dense(64, activation="relu"))
+                model2.add(Dense(n_features))
+        
+                model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
+                history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
+                st.session_state.model2 = model2
+        
