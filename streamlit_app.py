@@ -226,12 +226,6 @@ elif menu == "⚙️ Preprocessing":
         st.warning("❗ Silakan upload file terlebih dahulu.")
 # ========== MODELING ==========
 elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import LSTM, Dense, Dropout, Flatten
-    from tensorflow.keras.optimizers import Adam
-    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, LearningRateScheduler
-
     st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
 
     if 'reframed' not in st.session_state or 'df_musim' not in st.session_state:
