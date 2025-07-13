@@ -6,4 +6,4 @@ seaborn
 scikit-learn
 statsmodels
 openpyxl
-tensorflow
+tensorflow==2.12.0
