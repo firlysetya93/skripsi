@@ -391,4 +391,145 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
                 model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
                 history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
                 st.session_state.model2 = model2
+# Pastikan variabel hasil modeling sudah tersedia
+if 'y_test_inv' not in st.session_state or 'y_pred_inv' not in st.session_state:
+    st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
+else:
+    y_test_inv = st.session_state.y_test_inv
+    y_pred_inv = st.session_state.y_pred_inv
+    features = st.session_state.features
+
+    st.title("📈 Hasil Prediksi dan Evaluasi")
+
+    # Plot untuk masing-masing fitur
+    for i in range(len(features)):
+        fig, ax = plt.subplots(figsize=(20, 6))
+        ax.plot(y_test_inv[:, i], label='Actual')
+        ax.plot(y_pred_inv[:, i], label='Predicted')
+        ax.set_title(f"Actual vs Predicted - {features[i]}")
+        ax.set_xlabel("Time")
+        ax.set_ylabel(features[i])
+        ax.legend()
+        st.pyplot(fig)
+
+    # Membuat DataFrame hasil prediksi
+    def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
+        y_true_flat = y_true.flatten()
+        y_pred_flat = np.round(y_pred.flatten(), 3)
+        df_final = pd.DataFrame({
+            f'{feature_name}': y_true_flat,
+            f'{feature_name}_pred': y_pred_flat
+        })
+        return df_final
+
+    df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, features[0])
+    st.subheader("🧾 Contoh Tabel Prediksi")
+    st.dataframe(df_pred.head(10))
+
+    # Fungsi evaluasi
+    def calculate_metrics(y_true, y_pred, feature_name='FF_X'):
+        y_true = y_true.flatten()
+        y_pred = y_pred.flatten()
+
+        mae = mean_absolute_error(y_true, y_pred)
+        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+        r2 = r2_score(y_true, y_pred)
+
+        mask = y_true != 0
+        if np.any(mask):
+            mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+        else:
+            mape = np.nan
+
+        metrics = {
+            'feature': [feature_name],
+            'MAE': [mae],
+            'RMSE': [rmse],
+            'R2': [r2],
+            'MAPE': [mape]
+        }
+        return pd.DataFrame(metrics)
+
+    # Tampilkan metrik evaluasi
+    st.subheader("📊 Evaluasi Akurasi Model")
+    df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
+    st.dataframe(df_metrics)
+
+# ========== Menu Prediction ==========
+elif menu == "📈 Prediction":
+    st.title("📈 Halaman Prediksi")
+
+    if all(k in st.session_state for k in ['tuned_model', 'X_test', 'y_test', 'scaler', 'features']):
+        tuned_model = st.session_state.tuned_model
+        X_test = st.session_state.X_test
+        y_test = st.session_state.y_test
+        scaler = st.session_state.scaler
+        features = st.session_state.features
+
+        y_pred = tuned_model.predict(X_test)
+
+        def inverse_transform_and_plot(y_true, y_pred, scaler, features):
+            inv_pred = scaler.inverse_transform(y_pred)
+            inv_true = scaler.inverse_transform(y_true)
+
+            for i in range(len(features)):
+                fig, ax = plt.subplots(figsize=(20, 6))
+                ax.plot(inv_true[:, i], label='Actual')
+                ax.plot(inv_pred[:, i], label='Predicted')
+                ax.set_title(f'Actual vs Predicted for {features[i]}')
+                ax.set_xlabel('Time')
+                ax.set_ylabel(features[i])
+                ax.legend()
+                st.pyplot(fig)
+
+            return inv_true, inv_pred
+
+        def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
+            y_true_flat = y_true.flatten()
+            y_pred_flat = np.round(y_pred.flatten(), 3)
+            df_final = pd.DataFrame({
+                f'{feature_name}': y_true_flat,
+                f'{feature_name}_pred': y_pred_flat
+            })
+            return df_final
+
+        def calculate_metrics(y_true, y_pred, features):
+            metrics = {
+                'Feature': [],
+                'MAE': [],
+                'R2 Score': [],
+                'RMSE': [],
+                'MAPE (%)': []
+            }
+
+            for i, feature in enumerate(features):
+                actual = y_true[:, i].flatten()
+                predicted = y_pred[:, i].flatten()
+
+                mae = mean_absolute_error(actual, predicted)
+                r2 = r2_score(actual, predicted)
+                rmse = np.sqrt(mean_squared_error(actual, predicted))
+                mape = np.mean(np.abs((actual - predicted) / actual)) * 100
+
+                metrics['Feature'].append(feature)
+                metrics['MAE'].append(round(mae, 3))
+                metrics['R2 Score'].append(round(r2, 3))
+                metrics['RMSE'].append(round(rmse, 3))
+                metrics['MAPE (%)'].append(round(mape, 2))
+
+            return pd.DataFrame(metrics)
+
+        y_test_inverse, y_pred_inverse = inverse_transform_and_plot(y_test, y_pred, scaler, features)
+
+        df_pred = create_predictions_dataframe(y_test_inverse, y_pred_inverse, feature_name=features[0])
+        st.subheader("📋 Tabel Prediksi vs Aktual")
+        st.dataframe(df_pred.head(30))
+
+        st.subheader("📊 Evaluasi Akurasi Model")
+        df_metrics = calculate_metrics(y_test_inverse, y_pred_inverse, features)
+        st.dataframe(df_metrics)
+
+    else:
+        st.warning("❗ Pastikan Anda telah menjalankan pelatihan model terlebih dahulu.")
+
         
