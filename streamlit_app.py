@@ -290,6 +290,7 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
             st.metric("MAE (Test MAE)", f"{mae:.5f}")
 
             # Plot history
+            st.subheader("📉 Training History")
             fig, ax = plt.subplots()
             ax.plot(history.history['loss'], label='Training Loss')
             ax.plot(history.history['val_loss'], label='Validation Loss')
@@ -298,9 +299,8 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
             ax.set_title('Training History')
             ax.legend()
             st.pyplot(fig)
-
+        
             return history, loss
-
         # Tombol untuk mulai training
         if st.button("🚀 Jalankan Model LSTM Lengkap"):
             history1, test_loss1 = train_model_streamlit_full(model1, X_train, y_train, X_test, y_test)
