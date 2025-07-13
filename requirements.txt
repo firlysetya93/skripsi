@@ -4,7 +4,5 @@ numpy
 matplotlib
 seaborn
 scikit-learn
-tensorflow
-optuna
-openpyxl
 statsmodels
+openpyxl
