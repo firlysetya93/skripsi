@@ -313,7 +313,7 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         st.write("📐 Shape y_test :", y_test.shape)
 
         # ------------------------- MODEL LSTM -------------------------
-         st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
+        st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
         
         # Pastikan variabel tersedia di session_state
         required_vars = ['X_train', 'X_test', 'y_train', 'y_test', 'n_features']
