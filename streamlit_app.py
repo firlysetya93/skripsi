@@ -398,13 +398,14 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         features = ['FF_X']  # fallback kalau belum disimpan di session_state
     
         fig, ax = plt.subplots(figsize=(20, 6))
-        ax.plot(y_test_inv, label='Actual')
-        ax.plot(y_pred_inv, label='Predicted')
+        ax.plot(y_test_inv[:, 0], label='Actual')
+        ax.plot(y_pred_inv[:, 0], label='Predicted')
         ax.set_title(f'📉 Prediksi vs Aktual untuk {features[0]}')
         ax.set_xlabel('Time')
         ax.set_ylabel(features[0])
         ax.legend()
         st.pyplot(fig)
+
 
 
     # Membuat DataFrame hasil prediksi
