@@ -3,78 +3,78 @@ import pandas as pd
 import numpy as np
 import io
 
+st.set_page_config(page_title="📊 Preprocessing Musiman", layout="wide")
+st.title("📊 Preprocessing Kecepatan Angin per Musim")
 
-# ========================== SETUP ==========================
-st.set_page_config(page_title="🌪️ Prediksi Kecepatan Angin", layout="wide")
-menu = st.sidebar.selectbox("Navigasi Menu", [
-    "🏠 Home", "📊 EDA", "⚙️ Preprocessing", "🧠 Modeling (LSTM)", "📈 Prediction"
-])
+uploaded_file = st.sidebar.file_uploader("📤 Upload File Excel (.xlsx)", type=["xlsx"])
 
-# ========================== UPLOAD ==========================
-st.sidebar.header("📤 Upload File Excel")
-uploaded_file = st.sidebar.file_uploader("Pilih file .xlsx", type=["xlsx"])
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
+    st.success("✅ File berhasil dibaca!")
+
+    # Tampilkan beberapa baris awal
+    st.subheader("🔍 Data Awal")
+    st.dataframe(df.head())
+
+    # Cek missing value per kolom
+    st.subheader("📌 Missing Value Tiap Kolom")
+    missing = df.isnull().sum()
+    st.write(missing[missing > 0])
+
+    # Konversi TANGGAL dan ekstrak Bulan
+    df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
+    df['Bulan'] = df['TANGGAL'].dt.month
+
+    # Tambah kolom musim
+    def determine_season(month):
+        if month in [12, 1, 2]: return 'HUJAN'
+        elif month in [3, 4, 5]: return 'PANCAROBA I'
+        elif month in [6, 7, 8]: return 'KEMARAU'
+        else: return 'PANCAROBA II'
+
+    df['Musim'] = df['Bulan'].apply(determine_season)
+
+    # Tampilkan statistik per musim
+    st.subheader("📊 Statistik Per Musim")
+    grouped = df.groupby('Musim').agg({ 'FF_X': ['mean', 'max', 'min'] }).reset_index()
+    st.dataframe(grouped)
+
+    # Cek missing value per musim
+    st.subheader("🔎 Missing Value per Musim")
+    missing_rows = df[df.isnull().any(axis=1)]
+    if not missing_rows.empty:
+        for musim, rows in missing_rows.groupby('Musim'):
+            st.markdown(f"#### Musim: {musim}")
+            st.dataframe(rows)
+    else:
+        st.success("Tidak ada missing value yang ditemukan.")
+
+    # Imputasi nilai hilang dengan mean per musim
+    st.subheader("🧹 Imputasi Missing Value")
+    def fill_missing_values(group):
+        group['FF_X'] = group['FF_X'].fillna(group['FF_X'].mean())
+        return group
+
+    df_filled = df.groupby('Musim').apply(fill_missing_values)
+    df_filled.reset_index(drop=True, inplace=True)
+
+    st.write("Setelah imputasi, jumlah missing value:")
+    st.write(df_filled.isnull().sum())
+
+    # Pisahkan dataframe per musim
+    st.subheader("📁 Dataframe Per Musim")
+    dfs = {}
+    for season, group in df_filled.groupby('Musim'):
+        dfs[season] = group
+        st.markdown(f"#### {season}")
+        st.dataframe(group.head())
+
+    # Gabungkan ulang setelah reset index
+    st.subheader("🔄 Gabungan Semua Data Musiman dengan Reset Index")
+    df_selected = df_filled[['TANGGAL', 'FF_X', 'Musim']].set_index('TANGGAL')
+    dfs_reset = {season: group.reset_index() for season, group in df_selected.groupby('Musim')}
+    df_musim = pd.concat(dfs_reset.values(), ignore_index=True)
+
+    st.dataframe(df_musim.head(50))
 else:
-    df = None
-
-# ========================== HOME ==========================
-if menu == "🏠 Home":
-    st.title("🌪️ Aplikasi Prediksi Kecepatan Angin")
-    st.markdown("""
-        Aplikasi ini melakukan analisis dan prediksi kecepatan angin berdasarkan urutan waktu. 
-        Data akan diproses per musim dan dilatih menggunakan model LSTM.
-    """)
-
-# ========================== EDA ==========================
-elif menu == "📊 EDA":
-    st.title("📊 Exploratory Data Analysis")
-    if df is not None:
-        st.subheader("🔍 Data Awal")
-        st.dataframe(df.head())
-
-        st.subheader("📋 Struktur Data")
-        buffer = io.StringIO()
-        df.info(buf=buffer)
-        st.text(buffer.getvalue())
-
-        st.subheader("📈 Statistik Deskriptif")
-        st.dataframe(df.describe())
-    else:
-        st.warning("❗ Silakan upload file terlebih dahulu.")
-
-# ========================== PREPROCESSING ==========================
-elif menu == "⚙️ Preprocessing":
-    st.title("⚙️ Preprocessing Data")
-    if df is not None:
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
-        df['Bulan'] = df['TANGGAL'].dt.month
-
-        def determine_season(m):
-            if m in [12, 1, 2]: return 'HUJAN'
-            elif m in [3, 4, 5]: return 'PANCAROBA I'
-            elif m in [6, 7, 8]: return 'KEMARAU'
-            else: return 'PANCAROBA II'
-
-        df['Musim'] = df['Bulan'].apply(determine_season)
-
-        # Handle Missing
-        def fill_missing(group):
-            group['FF_X'] = group['FF_X'].fillna(group['FF_X'].mean())
-            return group
-
-        df_filled = df.groupby('Musim').apply(fill_missing)
-        df_filled.reset_index(drop=True, inplace=True)
-
-        df_selected = df_filled[['TANGGAL', 'FF_X', 'Musim']].set_index('TANGGAL')
-        dfs = {s: g.reset_index() for s, g in df_selected.groupby('Musim')}
-
-        for s, d in dfs.items():
-            st.markdown(f"### 🍂 Data Musim: `{s}`")
-            st.dataframe(d.head())
-
-        df_musim = pd.concat(dfs.values(), ignore_index=True)
-        st.markdown("### 🔄 Gabungan Semua Data Musiman")
-        st.dataframe(df_musim.head())
-    else:
-        st.warning("❗ Silakan upload file terlebih dahulu.")
+    st.warning("❗ Silakan upload file .xlsx terlebih dahulu.")
