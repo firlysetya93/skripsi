@@ -478,70 +478,70 @@ else:
 
             # Simpan ke session_state
             st.session_state.best_params = study.best_params
-elif menu == "🏋️ Final Training":
-    st.subheader("🏋️ Final Training dengan Hyperparameter Terbaik")
+    elif menu == "🏋️ Final Training":
+        st.subheader("🏋️ Final Training dengan Hyperparameter Terbaik")
 
-    if 'best_params' not in st.session_state:
-        st.warning("❗ Hyperparameter belum tersedia. Harap jalankan proses tuning Optuna terlebih dahulu.")
-    elif not all(k in st.session_state for k in ['X_train', 'X_test', 'y_train', 'y_test']):
-        st.warning("❗ Data latih dan test belum tersedia. Silakan lakukan preprocessing dan modeling terlebih dahulu.")
-    else:
-        # Ambil data dari session_state
-        best_params = st.session_state.best_params
-        X_train = st.session_state.X_train
-        X_test = st.session_state.X_test
-        y_train = st.session_state.y_train
-        y_test = st.session_state.y_test
-        n_features = X_train.shape[2]
-
-        # Buat model
-        model = Sequential()
-        model.add(LSTM(best_params['lstm_units'], activation='relu',
-                       dropout=best_params['dropout_rate'],
-                       recurrent_dropout=best_params['recurrent_dropout_rate'],
-                       return_sequences=True,
-                       input_shape=(X_train.shape[1], X_train.shape[2])))
-        model.add(Dropout(best_params['dropout_rate']))
-        model.add(LSTM(best_params['lstm_units'], activation='relu',
-                       dropout=best_params['dropout_rate'],
-                       recurrent_dropout=best_params['recurrent_dropout_rate']))
-        model.add(Dropout(best_params['dropout_rate']))
-        model.add(Dense(best_params['dense_units'], activation='relu'))
-        model.add(Dense(n_features))
-
-        optimizer = Adam(learning_rate=best_params['learning_rate'])
-        model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
-
-        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-
-        if st.button("🚀 Mulai Final Training"):
-            with st.spinner("⏳ Sedang melatih model..."):
-                history = model.fit(X_train, y_train,
-                                    epochs=best_params['epochs'],
-                                    batch_size=best_params['batch_size'],
-                                    validation_data=(X_test, y_test),
-                                    callbacks=[early_stopping],
-                                    shuffle=False,
-                                    verbose=0)
-                st.success("✅ Training selesai!")
-            
-            # Simpan model ke session_state
-            st.session_state.final_model = model
-
-            # Evaluasi
-            loss, mae = model.evaluate(X_test, y_test, verbose=0)
-            st.metric("MSE (Test Loss)", f"{loss:.5f}")
-            st.metric("MAE (Test MAE)", f"{mae:.5f}")
-
-            # Plot training history
-            fig, ax = plt.subplots()
-            ax.plot(history.history['loss'], label='Training Loss')
-            ax.plot(history.history['val_loss'], label='Validation Loss')
-            ax.set_xlabel('Epoch')
-            ax.set_ylabel('Loss')
-            ax.set_title('Training History')
-            ax.legend()
-            st.pyplot(fig)
+        if 'best_params' not in st.session_state:
+            st.warning("❗ Hyperparameter belum tersedia. Harap jalankan proses tuning Optuna terlebih dahulu.")
+        elif not all(k in st.session_state for k in ['X_train', 'X_test', 'y_train', 'y_test']):
+            st.warning("❗ Data latih dan test belum tersedia. Silakan lakukan preprocessing dan modeling terlebih dahulu.")
+        else:
+            # Ambil data dari session_state
+            best_params = st.session_state.best_params
+            X_train = st.session_state.X_train
+            X_test = st.session_state.X_test
+            y_train = st.session_state.y_train
+            y_test = st.session_state.y_test
+            n_features = X_train.shape[2]
+    
+            # Buat model
+            model = Sequential()
+            model.add(LSTM(best_params['lstm_units'], activation='relu',
+                           dropout=best_params['dropout_rate'],
+                           recurrent_dropout=best_params['recurrent_dropout_rate'],
+                           return_sequences=True,
+                           input_shape=(X_train.shape[1], X_train.shape[2])))
+            model.add(Dropout(best_params['dropout_rate']))
+            model.add(LSTM(best_params['lstm_units'], activation='relu',
+                           dropout=best_params['dropout_rate'],
+                           recurrent_dropout=best_params['recurrent_dropout_rate']))
+            model.add(Dropout(best_params['dropout_rate']))
+            model.add(Dense(best_params['dense_units'], activation='relu'))
+            model.add(Dense(n_features))
+    
+            optimizer = Adam(learning_rate=best_params['learning_rate'])
+            model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
+    
+            early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    
+            if st.button("🚀 Mulai Final Training"):
+                with st.spinner("⏳ Sedang melatih model..."):
+                    history = model.fit(X_train, y_train,
+                                        epochs=best_params['epochs'],
+                                        batch_size=best_params['batch_size'],
+                                        validation_data=(X_test, y_test),
+                                        callbacks=[early_stopping],
+                                        shuffle=False,
+                                        verbose=0)
+                    st.success("✅ Training selesai!")
+                
+                # Simpan model ke session_state
+                st.session_state.final_model = model
+    
+                # Evaluasi
+                loss, mae = model.evaluate(X_test, y_test, verbose=0)
+                st.metric("MSE (Test Loss)", f"{loss:.5f}")
+                st.metric("MAE (Test MAE)", f"{mae:.5f}")
+    
+                # Plot training history
+                fig, ax = plt.subplots()
+                ax.plot(history.history['loss'], label='Training Loss')
+                ax.plot(history.history['val_loss'], label='Validation Loss')
+                ax.set_xlabel('Epoch')
+                ax.set_ylabel('Loss')
+                ax.set_title('Training History')
+                ax.legend()
+                st.pyplot(fig)
 
 
         # Prediksi
