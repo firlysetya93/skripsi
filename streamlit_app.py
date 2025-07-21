@@ -17,13 +17,6 @@ import io
 import math
 import os
 import sys
-st.write("Python version:", sys.version)
-st.write("TensorFlow found:", "tensorflow" in sys.modules)
-try:
-    import tensorflow as tf
-    st.write("TensorFlow version:", tf.__version__)
-except Exception as e:
-    st.error(f"TensorFlow load error: {e}")
 
 st.set_page_config(page_title="🌪️ Aplikasi Prediksi Kecepatan Angin", layout="wide")
 
