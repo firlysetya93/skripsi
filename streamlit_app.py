@@ -93,8 +93,10 @@ elif menu == "⚙️ Preprocessing":
         st.warning("Upload data terlebih dahulu.")
 
 # ======================= MODELING =======================
-elif menu == "🧠 Modeling (LSTM)":
-    st.title("🧠 Modeling dengan LSTM")
+elif menu == "🧠 Modeling":
+    st.title("🧠 Modeling")
+    model_choice = st.selectbox("Pilih Model", ["LSTM", "TCN", "RBFNN"])
+
     if 'df_musim' in st.session_state:
         df = st.session_state.df_musim
         scaler = MinMaxScaler()
@@ -113,21 +115,57 @@ elif menu == "🧠 Modeling (LSTM)":
         train, test = supervised[:train_size], supervised[train_size:]
         X_train, y_train = train[:, :-1], train[:, -1]
         X_test, y_test = test[:, :-1], test[:, -1]
-        X_train = X_train.reshape((X_train.shape[0], n_lag, 1))
-        X_test = X_test.reshape((X_test.shape[0], n_lag, 1))
 
-        model = Sequential()
-        model.add(LSTM(64, input_shape=(n_lag, 1)))
-        model.add(Dense(1))
-        model.compile(optimizer='adam', loss='mse')
-        model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test), verbose=0)
+        if model_choice in ["LSTM", "TCN"]:
+            X_train = X_train.reshape((X_train.shape[0], n_lag, 1))
+            X_test = X_test.reshape((X_test.shape[0], n_lag, 1))
 
-        y_pred = model.predict(X_test)
-        y_pred_inv = scaler.inverse_transform(y_pred)
+            model = Sequential()
+            if model_choice == "LSTM":
+                model.add(LSTM(64, input_shape=(n_lag, 1)))
+            else:
+                model.add(TCN(input_shape=(n_lag, 1)))
+            model.add(Dense(1))
+            model.compile(optimizer='adam', loss='mse')
+            model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test), verbose=0)
+
+            y_pred = model.predict(X_test)
+
+        elif model_choice == "RBFNN":
+            from sklearn.linear_model import LinearRegression
+            class RBF:
+                def __init__(self, X, y, n_centers):
+                    self.kmeans = KMeans(n_clusters=n_centers).fit(X)
+                    self.centers = self.kmeans.cluster_centers_
+                    self.sigma = np.mean([np.linalg.norm(c - X.mean(axis=0)) for c in self.centers])
+                    self.lr = LinearRegression()
+                    self.X = X
+                    self.y = y
+
+                def _rbf(self, x, center):
+                    return np.exp(-np.linalg.norm(x - center)**2 / (2 * self.sigma**2))
+
+                def transform(self, X):
+                    return np.array([[self._rbf(x, c) for c in self.centers] for x in X])
+
+                def fit(self):
+                    X_rbf = self.transform(self.X)
+                    self.lr.fit(X_rbf, self.y)
+
+                def predict(self, X):
+                    return self.lr.predict(self.transform(X))
+
+            rbf = RBF(X_train, y_train, n_centers=10)
+            rbf.fit()
+            y_pred = rbf.predict(X_test)
+
+        y_pred_inv = scaler.inverse_transform(y_pred.reshape(-1, 1))
         y_test_inv = scaler.inverse_transform(y_test.reshape(-1, 1))
 
         st.session_state.y_pred_inv = y_pred_inv
         st.session_state.y_test_inv = y_test_inv
+        st.success(f"Model {model_choice} selesai dilatih.")
+
     else:
         st.warning("Lakukan preprocessing terlebih dahulu.")
 
@@ -157,3 +195,4 @@ elif menu == "📈 Prediction":
         st.dataframe(calculate_metrics(y_test_inv, y_pred_inv))
     else:
         st.warning("Belum ada hasil prediksi. Silakan lakukan modeling terlebih dahulu.")
+
