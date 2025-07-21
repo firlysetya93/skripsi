@@ -1,8 +1,9 @@
 streamlit
-tensorflow==2.13.0
-scikit-learn
 pandas
+numpy
 matplotlib
+scikit-learn
 statsmodels
 openpyxl
-
+tensorflow
+keras-tcn
