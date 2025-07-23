@@ -280,38 +280,71 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
     else:
         st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
         # ------------------------- TRAIN TEST SPLIT -------------------------
+    st.title("📈 Prediksi Kecepatan Angin dengan LSTM")
+    
+    # Ambil dari session_state
+    df = st.session_state.get('df_musim', None)
+    reframed = st.session_state.get('reframed', None)
+    scaler_y = st.session_state.get('scaler_y', None)  # Pastikan ini disimpan saat normalisasi sebelumnya
+    
+    # Validasi input
+    if df is None or reframed is None or scaler_y is None:
+        st.warning("❗ Pastikan Anda telah menyelesaikan preprocessing dan transformasi supervised.")
+    else:
         st.subheader("🧪 Split Data untuk LSTM")
-        if st.button("Train Model"):
-            model.fit(train_X, train_y, epochs=50, batch_size=32, verbose=0)
-            y_pred = model.predict(test_X)
-            y_pred_inv = scaler_y.inverse_transform(y_pred)
-            y_test_inv = scaler_y.inverse_transform(test_y)
-        
-            st.success("Model telah dilatih dan diprediksi.")
-        
-            # Tambahkan ini
-            st.session_state['y_pred'] = y_pred_inv
-            st.session_state['y_test'] = y_test_inv
-            st.session_state['model'] = model
-
-
+    
         # Ambil nilai array dari dataframe hasil reframing
         values = reframed.values
-
+    
         # Simpan index tanggal dari hasil reframing
-        date_reframed = df_musim.index[reframed.index]
-
+        date_reframed = df.index[reframed.index]
+    
         # Split manual (tanpa shuffle)
         train_size = int(len(values) * 0.8)
         train, test = values[:train_size], values[train_size:]
-
-        # Bagi juga tanggal
+    
+        # Bagi input-output
+        train_X, train_y = train[:, :-1], train[:, -1]
+        test_X, test_y = test[:, :-1], test[:, -1]
+    
+        # Simpan juga tanggal
         date_train = date_reframed[:len(train)]
         date_test = date_reframed[len(train):]
-
+    
+        # Reshape input untuk LSTM: [samples, timesteps, features]
+        train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))
+        test_X = test_X.reshape((test_X.shape[0], 1, test_X.shape[1]))
+    
         st.write(f"Jumlah data: {len(values)}")
-        st.write(f"Jumlah train: {len(train)} ({date_train.min().date()} s.d. {date_train.max().date()})")
-        st.write(f"Jumlah test : {len(test)} ({date_test.min().date()} s.d. {date_test.max().date()})")
+        st.write(f"Train: {len(train)} ({date_train.min().date()} s.d. {date_train.max().date()})")
+        st.write(f"Test : {len(test)} ({date_test.min().date()} s.d. {date_test.max().date()})")
+    
+        # Buat model LSTM
+        model = Sequential()
+        model.add(LSTM(64, activation='relu', input_shape=(train_X.shape[1], train_X.shape[2])))
+        model.add(Dense(1))
+        model.compile(optimizer='adam', loss='mse')
+    
+        # Tombol pelatihan model
+        if st.button("🚀 Train Model"):
+            with st.spinner("⏳ Melatih model..."):
+                model.fit(train_X, train_y, epochs=50, batch_size=32, verbose=0)
+    
+                # Prediksi
+                y_pred = model.predict(test_X)
+    
+                # Inverse transform hasil prediksi dan aktual
+                y_pred_inv = scaler_y.inverse_transform(y_pred)
+                y_test_inv = scaler_y.inverse_transform(test_y.reshape(-1, 1))
+    
+                # Simpan hasil ke session state
+                st.session_state['y_pred'] = y_pred_inv
+                st.session_state['y_test'] = y_test_inv
+                st.session_state['model'] = model
+                st.session_state['date_test'] = date_test
+    
+            st.success("✅ Model telah dilatih dan diprediksi!")
+        
 
         # ------------------------- PISAHKAN X dan y -------------------------
         n_obs = n_days * n_features
