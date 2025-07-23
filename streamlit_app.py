@@ -225,6 +225,10 @@ elif menu == "⚙️ Preprocessing":
 # ========== MODELING ==========
 elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
     st.title("🧠 Transformasi Supervised Learning (Lag Feature)")
+    st.session_state['y_pred'] = y_pred
+    st.session_state['y_test'] = y_test
+    st.session_state['model'] = model
+
 
     if 'df_musim' in st.session_state:
         df_musim = st.session_state.df_musim
@@ -277,6 +281,19 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
         st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
         # ------------------------- TRAIN TEST SPLIT -------------------------
         st.subheader("🧪 Split Data untuk LSTM")
+        if st.button("Train Model"):
+            model.fit(train_X, train_y, epochs=50, batch_size=32, verbose=0)
+            y_pred = model.predict(test_X)
+            y_pred_inv = scaler_y.inverse_transform(y_pred)
+            y_test_inv = scaler_y.inverse_transform(test_y)
+        
+            st.success("Model telah dilatih dan diprediksi.")
+        
+            # Tambahkan ini
+            st.session_state['y_pred'] = y_pred_inv
+            st.session_state['y_test'] = y_test_inv
+            st.session_state['model'] = model
+
 
         # Ambil nilai array dari dataframe hasil reframing
         values = reframed.values
@@ -392,12 +409,12 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
                 history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
                 st.session_state.model2 = model2
 # Pastikan variabel hasil modeling sudah tersedia
-if 'y_test_inv' not in st.session_state or 'y_pred_inv' not in st.session_state:
-    st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
-else:
-    y_test_inv = st.session_state.y_test_inv
-    y_pred_inv = st.session_state.y_pred_inv
-    features = st.session_state.features
+    if 'y_test_inv' not in st.session_state or 'y_pred_inv' not in st.session_state:
+        st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
+    else:
+        y_test_inv = st.session_state.y_test_inv
+        y_pred_inv = st.session_state.y_pred_inv
+        features = st.session_state.features
 
     st.title("📈 Hasil Prediksi dan Evaluasi")
 
