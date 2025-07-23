@@ -391,6 +391,15 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
                 model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
                 history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
                 st.session_state.model2 = model2
+# Pastikan variabel hasil modeling sudah tersedia
+if 'y_test_inv' not in st.session_state or 'y_pred_inv' not in st.session_state:
+    st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
+else:
+    y_test_inv = st.session_state.y_test_inv
+    y_pred_inv = st.session_state.y_pred_inv
+    features = st.session_state.features
+
+    st.title("📈 Hasil Prediksi dan Evaluasi")
 
     # Plot untuk masing-masing fitur
     for i in range(len(features)):
@@ -446,59 +455,8 @@ elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
     df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
     st.dataframe(df_metrics)
     
-elif menu == "📈 Prediction":
+if menu == "📈 Prediction":
     st.title("📈 Halaman Prediksi")
-
-    # Cek apakah hasil prediksi sudah tersedia
-    if 'y_test_inv' not in st.session_state or 'y_pred_inv' not in st.session_state:
-        st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
-    else:
-        y_test_inv = st.session_state.y_test_inv
-        y_pred_inv = st.session_state.y_pred_inv
-        features = st.session_state.features
-
-        st.title("📈 Hasil Prediksi dan Evaluasi")
-
-        # Plot untuk masing-masing fitur
-        for i in range(len(features)):
-            fig, ax = plt.subplots(figsize=(20, 6))
-            ax.plot(y_test_inv[:, i], label='Actual')
-            ax.plot(y_pred_inv[:, i], label='Predicted')
-            ax.set_title(f"Actual vs Predicted - {features[i]}")
-            ax.set_xlabel("Time")
-            ax.set_ylabel(features[i])
-            ax.legend()
-            st.pyplot(fig)
-
-        def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
-            y_true_flat = y_true.flatten()
-            y_pred_flat = np.round(y_pred.flatten(), 3)
-            return pd.DataFrame({f'{feature_name}': y_true_flat,
-                                 f'{feature_name}_pred': y_pred_flat})
-
-        df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, features[0])
-        st.subheader("🧾 Tabel Prediksi")
-        st.dataframe(df_pred.head(30))
-
-        def calculate_metrics(y_true, y_pred, feature_name='FF_X'):
-            y_true = y_true.flatten()
-            y_pred = y_pred.flatten()
-            mae = mean_absolute_error(y_true, y_pred)
-            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-            r2 = r2_score(y_true, y_pred)
-            mask = y_true != 0
-            mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100 if np.any(mask) else np.nan
-            return pd.DataFrame({
-                'Feature': [feature_name],
-                'MAE': [round(mae, 3)],
-                'RMSE': [round(rmse, 3)],
-                'R2 Score': [round(r2, 3)],
-                'MAPE (%)': [round(mape, 2)]
-            })
-
-        st.subheader("📊 Evaluasi Akurasi Model")
-        df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
-        st.dataframe(df_metrics)
 
     # Pastikan semua komponen tersedia
     required_keys = ['tuned_model', 'X_test', 'y_test', 'scaler', 'features']
