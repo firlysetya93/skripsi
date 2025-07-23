@@ -48,27 +48,21 @@ Aplikasi ini membantu kamu:
 # ======================= EDA =======================
 elif menu == "📊 EDA":
     st.title("📊 Exploratory Data Analysis")
-    if df is not None:
-        st.subheader("🔍 Data Awal")
-        st.dataframe(df.head())
-        st.subheader("📈 Statistik Deskriptif")
-        st.dataframe(df.describe())
-
-        if 'TANGGAL' in df.columns and 'FF_X' in df.columns:
-            df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
-            df.set_index('TANGGAL', inplace=True)
-            ts = df['FF_X'].dropna()
-
-            fig, ax = plt.subplots(figsize=(20, 5))
-            ax.plot(ts)
-            ax.set_title("Time Series Plot")
-            st.pyplot(fig)
-
-            result = adfuller(ts)
-            st.write(f"ADF Statistic: {result[0]:.4f}")
-            st.write(f"p-value: {result[1]:.4f}")
+    if 'TANGGAL' in df.columns and 'FF_X' in df.columns:
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
+        df.set_index('TANGGAL', inplace=True)
+        ts = df['FF_X'].dropna()
+    
+        fig, ax = plt.subplots(figsize=(20, 5))
+        ax.plot(ts)
+        ax.set_title("Time Series Plot")
+        st.pyplot(fig)
+    
+        result = adfuller(ts)
+        st.write(f"ADF Statistic: {result[0]:.4f}")
+        st.write(f"p-value: {result[1]:.4f}")
     else:
-        st.warning("Upload data terlebih dahulu.")
+        st.warning("Kolom 'TANGGAL' dan/atau 'FF_X' tidak ditemukan pada dataset.")
 
 # ======================= PREPROCESSING =======================
 elif menu == "⚙️ Preprocessing":
