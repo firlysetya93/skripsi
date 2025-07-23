@@ -48,21 +48,59 @@ Aplikasi ini membantu kamu:
 # ======================= EDA =======================
 elif menu == "📊 EDA":
     st.title("📊 Exploratory Data Analysis")
-    if 'TANGGAL' in df.columns and 'FF_X' in df.columns:
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
-        df.set_index('TANGGAL', inplace=True)
-        ts = df['FF_X'].dropna()
-    
-        fig, ax = plt.subplots(figsize=(20, 5))
-        ax.plot(ts)
-        ax.set_title("Time Series Plot")
-        st.pyplot(fig)
-    
-        result = adfuller(ts)
-        st.write(f"ADF Statistic: {result[0]:.4f}")
-        st.write(f"p-value: {result[1]:.4f}")
+    from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+
+elif menu == "📊 EDA":
+    st.title("📊 Exploratory Data Analysis")
+
+    if df is not None:
+        st.subheader("🔍 Data Awal")
+        st.dataframe(df.head())
+        st.subheader("📈 Statistik Deskriptif")
+        st.dataframe(df.describe())
+
+        if 'TANGGAL' in df.columns and 'FF_X' in df.columns:
+            df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
+            df.set_index('TANGGAL', inplace=True)
+
+            ts = df['FF_X'].dropna()
+
+            # --- Uji ADF ---
+            st.subheader("📉 Uji Stasioneritas (ADF Test)")
+            result = adfuller(ts, autolag='AIC')
+            st.write(f"**ADF Statistic** : {result[0]:.4f}")
+            st.write(f"**p-value**       : {result[1]:.4f}")
+            st.write("**Critical Values:**")
+            for key, value in result[4].items():
+                st.write(f"• {key}: {value:.4f}")
+            if result[1] <= 0.05:
+                st.success("✅ Data stasioner (tolak H0)")
+            else:
+                st.warning("⚠️ Data tidak stasioner (gagal tolak H0)")
+
+            # --- Plot ACF, PACF, dan Time Series ---
+            st.subheader("📊 Plot ACF, PACF, dan Time Series")
+            fig, axes = plt.subplots(3, 1, figsize=(18, 14))
+            plt.subplots_adjust(hspace=0.5)
+
+            plot_acf(ts, lags=50, ax=axes[0])
+            axes[0].set_title('Autocorrelation Function (ACF) - FF_X')
+
+            plot_pacf(ts, lags=50, ax=axes[1], method='ywm')
+            axes[1].set_title('Partial Autocorrelation Function (PACF) - FF_X')
+
+            axes[2].plot(ts, color='blue')
+            axes[2].set_title('Time Series Plot - FF_X')
+            axes[2].set_xlabel('Tanggal')
+            axes[2].set_ylabel('Kecepatan Angin (FF_X)')
+
+            st.pyplot(fig)
+
+        else:
+            st.warning("Kolom 'TANGGAL' dan/atau 'FF_X' tidak ditemukan pada dataset.")
     else:
-        st.warning("Kolom 'TANGGAL' dan/atau 'FF_X' tidak ditemukan pada dataset.")
+        st.warning("Silakan upload data terlebih dahulu.")
+
 
 # ======================= PREPROCESSING =======================
 elif menu == "⚙️ Preprocessing":
