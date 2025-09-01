@@ -44,6 +44,14 @@ menu = st.sidebar.radio(
 # === Menu 1: Preprocessing & Analisis Musim ===
 if menu == "Preprocessing & Analisis Musim":
     st.title("📊 Analisis Kecepatan Angin")
+    # Penjelasan penelitian
+    st.markdown("""
+    Memahami pola kecepatan angin di suatu wilayah sangat penting karena kecepatan angin yang tinggi atau fluktuatif dapat memengaruhi keselamatan, transportasi, dan berbagai aktivitas masyarakat.  
+    Oleh karena itu, prediksi kecepatan angin yang akurat diperlukan untuk mendukung perencanaan dan mitigasi risiko akibat kondisi angin ekstrem.  
+    
+    Proyek penelitian ini menggunakan teknologi AI untuk menganalisis data historis kecepatan angin dan memprediksi kondisi di masa mendatang.  
+    Dengan pendekatan ini, informasi prediksi kecepatan angin dapat membantu meningkatkan kesiapsiagaan masyarakat dan pengambilan keputusan yang lebih tepat terkait aktivitas yang dipengaruhi oleh angin.
+    """)
     uploaded_file = st.file_uploader("Unggah file Excel", type=['xlsx'])
 
     if uploaded_file is not None:
