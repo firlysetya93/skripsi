@@ -1,538 +1,772 @@
-# streamlit_app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import io
-from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
+import optuna
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping
+from tcn import TCN
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from tensorflow.keras.models import load_model
+import tempfile
+from datetime import timedelta
 
-st.set_page_config(page_title="🌪️ Aplikasi Prediksi Kecepatan Angin", layout="wide")
 
-# Sidebar
-menu = st.sidebar.selectbox("Navigasi Menu", [
-    "🏠 Home",
-    "📤 Upload Data",
-    "📊 EDA",
-    "⚙️ Preprocessing",
-    "🧠 Modeling (LSTM / TCN / RBFNN)",
-    "📈 Prediction"
-])
 
-uploaded_file = st.sidebar.file_uploader("Upload file Excel (.xlsx)", type=["xlsx"])
+# === Sidebar menu ===
+# === Sidebar menu ===
+st.sidebar.title("📂 Menu")
 
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
-    st.session_state.df = df
-else:
-    df = st.session_state.get('df', None)
+# Cek apakah ada state menu yang tersimpan
+if "menu" not in st.session_state:
+    st.session_state["menu"] = "Preprocessing & Analisis Musim"
 
-# ========== HOME ==========
-if menu == "🏠 Home":
-    st.title("🏠 Selamat Datang di Aplikasi Prediksi Kecepatan Angin")
-    st.markdown("""
-Aplikasi ini membantu kamu:
-- 📊 Melakukan eksplorasi data angin (EDA)
-- ⚙️ Preprocessing berdasarkan musim
-- 🧠 Modeling dengan LSTM / TCN / RBFNN
-- 📈 Prediksi kecepatan angin ke depan
-""")
+menu = st.sidebar.radio(
+    "Pilih Halaman", 
+    ["Preprocessing & Analisis Musim", 
+     "Transformasi Supervised & Splitting", 
+     "Hyperparameter Tuning (TCN)", 
+     "Evaluasi Model"],
+    index=["Preprocessing & Analisis Musim", 
+           "Transformasi Supervised & Splitting", 
+           "Hyperparameter Tuning (TCN)", 
+           "Evaluasi Model"].index(st.session_state["menu"])  # simpan posisi terakhir
+)
 
-# ========== Upload Data ==========
-elif menu == "📤 Upload Data":
-    st.title("📤 Upload Data")
-    if df is not None:
-        st.success("✅ File berhasil dibaca!")
-        st.dataframe(df.head())
-        st.write("### Missing Value per Kolom")
-        st.dataframe(df.isnull().sum()[df.isnull().sum() > 0])
-    else:
-        st.warning("❗ Silakan upload file terlebih dahulu.")
+# === Menu 1: Preprocessing & Analisis Musim ===
+if menu == "Preprocessing & Analisis Musim":
+    st.title("📊 Analisis Kecepatan Angin")
+    uploaded_file = st.file_uploader("Unggah file Excel", type=['xlsx'])
 
-# ========== EDA ==========
-elif menu == "📊 EDA":
-    st.title("📊 Exploratory Data Analysis")
-
-    if df is not None:
-        st.subheader("🔍 Data Awal")
+    if uploaded_file is not None:
+        df = pd.read_excel(uploaded_file)
+        st.subheader("📊 Preview Data (5 Baris Pertama)")
         st.dataframe(df.head())
 
-        st.subheader("📋 Struktur Data")
-        buffer = io.StringIO()
-        df.info(buf=buffer)
-        st.text(buffer.getvalue())
+        st.subheader("🧩 Jumlah Missing Values per Kolom")
+        missing_values = df.isnull().sum()
+        st.dataframe(missing_values[missing_values > 0])
 
-        st.subheader("📈 Statistik Deskriptif")
-        st.dataframe(df.describe())
-
-        st.subheader("📉 Visualisasi Kolom Numerik")
-        num_cols = df.select_dtypes(include=np.number).columns.tolist()
-        if num_cols:
-            selected = st.selectbox("Pilih kolom:", num_cols)
-            st.line_chart(df[selected])
-
-        st.subheader("📉 ACF & PACF")
-        if 'TANGGAL' in df.columns and 'FF_X' in df.columns:
-            df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
-            df.set_index('TANGGAL', inplace=True)
-            ts = df['FF_X'].dropna()
-            fig, axes = plt.subplots(3, 1, figsize=(14, 10))
-            plot_acf(ts, lags=50, ax=axes[0])
-            axes[0].set_title("Autocorrelation Function (ACF)")
-            plot_pacf(ts, lags=50, ax=axes[1], method='ywm')
-            axes[1].set_title("Partial Autocorrelation Function (PACF)")
-            axes[2].plot(ts)
-            axes[2].set_title("Time Series Plot")
-            st.pyplot(fig)
-
-            st.markdown("""
-**Interpretasi Visualisasi:**
-
-- **ACF (Autocorrelation Function):**
-  Menunjukkan korelasi antara nilai saat ini dengan nilai sebelumnya (lag). Pola ACF membantu dalam mengidentifikasi komponen MA (Moving Average) pada data.
-
-- **PACF (Partial Autocorrelation Function):**
-  Menunjukkan korelasi langsung antara nilai sekarang dan nilai lag-n, setelah menghilangkan pengaruh dari lag-lag di antaranya. Pola PACF bermanfaat untuk menentukan komponen AR (AutoRegressive).
-
-- **Time Series Plot:**
-  Menampilkan pola keseluruhan data kecepatan angin dari waktu ke waktu. Dapat digunakan untuk melihat tren dan musiman.
-
-💡 Jika ACF/PACF menunjukkan puncak berulang secara berkala, itu menandakan adanya pola musiman.
-""")
-
-        st.subheader("📉 Seasonal Decomposition")
         if 'FF_X' in df.columns:
-            ts = df['FF_X'].dropna()
-            result = seasonal_decompose(ts, model='additive', period=30)
-            fig, axes = plt.subplots(4, 1, figsize=(16, 12))
-            axes[0].plot(result.observed)
-            axes[0].set_title("Observed")
-            axes[1].plot(result.trend)
-            axes[1].set_title("Trend")
-            axes[2].plot(result.seasonal)
-            axes[2].set_title("Seasonal")
-            axes[3].plot(result.resid)
-            axes[3].set_title("Residual")
-            st.pyplot(fig)
-            st.markdown("""
-**Penjelasan Komponen Dekomposisi:**
-
-- **Observed:** Data asli gabungan antara tren, musiman, dan noise.
-- **Trend:** Menunjukkan kecenderungan jangka panjang (naik atau turun).
-- **Seasonal:** Menggambarkan fluktuasi musiman berulang, misalnya bulanan atau musiman.
-- **Residual:** Sisa dari data setelah tren dan musiman dihilangkan (noise).
-""")
-
-        st.subheader("📈 Uji Stasioneritas (ADF)")
-        result = adfuller(ts, autolag='AIC')
-        st.write(f"ADF Statistic : {result[0]:.4f}")
-        st.write(f"p-value       : {result[1]:.4f}")
-        st.write("Critical Values:")
-        for key, value in result[4].items():
-            st.write(f"   {key} : {value:.4f}")
-        if result[1] <= 0.05:
-            st.success("✅ Data stasioner (tolak H0): Pola statistik tetap sepanjang waktu")
+            st.subheader("🔎 Baris dengan Missing Values pada Kolom 'FF_X'")
+            st.dataframe(df[df['FF_X'].isnull()])
         else:
-            st.warning("⚠️ Data tidak stasioner (gagal tolak H0): Pola statistik berubah sepanjang waktu")
+            st.warning("⚠️ Kolom 'FF_X' tidak ditemukan dalam dataset.")
+
+        if 'TANGGAL' in df.columns:
+            try:
+                df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
+                df['Bulan'] = df['TANGGAL'].dt.month
+
+                def determine_season(month):
+                    if month in [12, 1, 2]:
+                        return 'HUJAN'
+                    elif month in [3, 4, 5]:
+                        return 'PANCAROBA I'
+                    elif month in [6, 7, 8]:
+                        return 'KEMARAU'
+                    elif month in [9, 10, 11]:
+                        return 'PANCAROBA II'
+                    else:
+                        return 'UNKNOWN'
+
+                df['Musim'] = df['Bulan'].apply(determine_season)
+                df['tahun'] = df['TANGGAL'].dt.year
+
+                st.session_state['df'] = df
+                st.subheader("📋 Data Setelah Ditambah Kolom Bulan & Musim")
+                st.dataframe(df.head())
+
+                st.subheader("📊 Statistik Kecepatan Angin Berdasarkan Musim")
+                grouped = df.groupby('Musim').agg({'FF_X': ['mean', 'max', 'min']}).reset_index()
+                grouped.columns = ['Musim', 'FF_X Mean', 'FF_X Max', 'FF_X Min']
+                st.dataframe(grouped)
+
+                df_selected = df[['TANGGAL', 'FF_X', 'Musim']].copy()
+                df_selected = df_selected.set_index('TANGGAL')
+
+                dfs = {}
+                for season, group in df_selected.groupby('Musim'):
+                    dfs[season] = group.reset_index()
+
+                st.subheader("🗂️ Data Per Musim")
+                for season, df_season in dfs.items():
+                    st.markdown(f"### Musim: {season}")
+                    st.dataframe(df_season.head())
+
+                df_musim = pd.concat(dfs.values(), ignore_index=True)
+                df_musim = df_musim.sort_values('TANGGAL').reset_index(drop=True)
+                st.session_state['df_musim'] = df_musim
+
+                st.subheader("📅 Data Gabungan (Diurutkan Berdasarkan Tanggal)")
+                st.dataframe(df_musim.head(1000))
+
+                # --- Analisis Time Series ---
+                st.subheader("📈 Rata-Rata Kecepatan Angin per Tahun")
+                rata_tahunan = df.groupby('tahun')['FF_X'].mean()
+                fig1, ax1 = plt.subplots(figsize=(10, 5))
+                ax1.plot(rata_tahunan.index, rata_tahunan.values, marker='o')
+                ax1.set_xlabel('Tahun')
+                ax1.set_ylabel('Rata-rata Kecepatan Angin (m/s)')
+                ax1.set_title('Rata-Rata Kecepatan Angin per Tahun')
+                ax1.grid(True)
+                ax1.set_xticks(rata_tahunan.index)
+                st.pyplot(fig1)
+            # --- Uji Stasioneritas ADF dan ACF/PACF Seluruh Data ---
+                st.subheader("📉 Uji Stasioneritas (ADF Test) per Musim")
+                adf_results = []
+                for season, df_season in dfs.items():
+                    series = df_season['FF_X'].dropna()
+                    adf_result = adfuller(series)
+                    adf_results.append({
+                        'Musim': season,
+                        'ADF Statistic': adf_result[0],
+                        'p-value': adf_result[1],
+                        'Critical Value 5%': adf_result[4]['5%']
+                    })
+                st.dataframe(pd.DataFrame(adf_results))
+
+                st.subheader("🔁 ACF dan PACF Plot per Musim (100 Lags)")
+                # Pastikan kolom 'TANGGAL' menjadi datetime
+                if 'TANGGAL' in df_musim.columns:
+                    df_musim['TANGGAL'] = pd.to_datetime(df_musim['TANGGAL'])
+                    df_musim.set_index('TANGGAL', inplace=True)
+        
+                # Ambil hanya kolom FF_X dan drop NaN
+                if 'FF_X' in df_musim.columns:
+                    ts = df_musim['FF_X'].dropna()
+        
+                    # --- Uji Stasioneritas: Augmented Dickey-Fuller (ADF) ---
+                    result = adfuller(ts, autolag='AIC')
+        
+                    st.markdown("### Hasil Uji ADF untuk FF_X")
+                    st.write(f"**ADF Statistic** : {result[0]:.4f}")
+                    st.write(f"**p-value**       : {result[1]:.4f}")
+                    st.write("**Critical Values:**")
+                    for key, value in result[4].items():
+                        st.write(f"   {key} : {value:.4f}")
+                    if result[1] <= 0.05:
+                        st.success("✅ Data stasioner (tolak H0)")
+                    else:
+                        st.warning("⚠️ Data tidak stasioner (gagal tolak H0)")
+        
+                    # --- Plot ACF, PACF, dan Time Series ---
+                    fig, axes = plt.subplots(3, 1, figsize=(16, 12))
+                    plt.subplots_adjust(hspace=0.5)
+        
+                    # Plot ACF
+                    plot_acf(ts, lags=50, ax=axes[0])
+                    axes[0].set_title("Autocorrelation Function (ACF) - FF_X")
+        
+                    # Plot PACF
+                    plot_pacf(ts, lags=50, ax=axes[1], method='ywm')
+                    axes[1].set_title("Partial Autocorrelation Function (PACF) - FF_X")
+        
+                    # Plot Time Series
+                    axes[2].plot(ts, color='blue')
+                    axes[2].set_title("Time Series Plot - FF_X")
+                    axes[2].set_xlabel("Tanggal")
+                    axes[2].set_ylabel("Kecepatan Angin (FF_X)")
+        
+                    st.pyplot(fig)
+                st.success("✅ Preprocessing dan analisis musiman selesai! Data siap digunakan di menu berikutnya.")
+            except Exception as e:
+                st.error(f"❌ Terjadi kesalahan saat memproses tanggal: {e}")
+        else:
+            st.warning("⚠️ Kolom 'TANGGAL' tidak ditemukan dalam dataset.")
+                            # Jika berhasil selesai preprocessing
+        st.success("✅ Preprocessing dan analisis musiman selesai! Data siap digunakan di menu berikutnya.")
+
+        # Tombol ke tahap berikutnya
+        if st.button("➡️ Lanjut ke Tahap Berikutnya"):
+            st.session_state["menu"] = "Transformasi Supervised & Splitting"
+            st.rerun()   # refresh app agar langsung pindah menu
     else:
-        st.warning("❗ Silakan upload file terlebih dahulu.")
-# ========== PREPROCESSING ==========
-elif menu == "⚙️ Preprocessing":
-    st.title("⚙️ Preprocessing Data")
+        st.info("⬆️ Silakan upload file Excel (.xlsx) terlebih dahulu.")
+    
+# === Menu 4: Transformasi Supervised & Splitting ===
+if menu == "Transformasi Supervised & Splitting":
+    st.title("🔁 Transformasi Supervised Learning")
 
-    if df is not None:
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
-        df['Bulan'] = df['TANGGAL'].dt.month
+    if "df_musim" not in st.session_state:
+        st.warning("❗ Data musim belum tersedia. Silakan lakukan preprocessing terlebih dahulu.")
+        st.stop()
+    
+    df_musim = st.session_state["df_musim"].copy()
 
-        def determine_season(m):
-            if m in [12, 1, 2]: return 'HUJAN'
-            elif m in [3, 4, 5]: return 'PANCAROBA I'
-            elif m in [6, 7, 8]: return 'KEMARAU'
-            elif m in [9, 10, 11]: return 'PANCAROBA II'
+    # --- Normalisasi ---
+    st.subheader("📊 Normalisasi Data")
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaled_values = scaler.fit_transform(df_musim[['FF_X']].values.astype('float32'))
+    df_musim['FF_X_scaled'] = scaled_values
+    st.session_state['scaler'] = scaler
 
-        df['Musim'] = df['Bulan'].apply(determine_season)
+    # --- Train-test split ---
+    st.subheader("✂️ Pembagian Data Train dan Test")
+    df_train, df_test = train_test_split(df_musim, test_size=0.2, shuffle=False)
+    st.session_state['df_train'] = df_train
+    st.session_state['df_test'] = df_test
 
-        st.success("✅ Kolom Bulan & Musim berhasil ditambahkan.")
-
-        # Isi missing value berdasarkan musim
-        def fill_missing_values(group):
-            group['FF_X'] = group['FF_X'].fillna(group['FF_X'].mean())
-            return group
-
-        df_filled = df.groupby('Musim').apply(fill_missing_values)
-        df_filled.reset_index(drop=True, inplace=True)
-
-        # Simpan df_musim ke sesi
-        df_selected = df_filled[['TANGGAL', 'FF_X', 'Musim']]
-        df_selected.set_index('TANGGAL', inplace=True)
-        dfs = {s: g.reset_index() for s, g in df_selected.groupby('Musim')}
-        df_musim = pd.concat(dfs.values(), ignore_index=True)
-        df_musim['TANGGAL'] = pd.to_datetime(df_musim['TANGGAL'])
-        df_musim.set_index('TANGGAL', inplace=True)
-        st.session_state.df_musim = df_musim
-
-        st.success("✅ Missing value ditangani & data digabung berdasarkan musim.")
-        st.dataframe(df_musim.head())
-
-        # --------- PEMBAGIAN TRAIN-TEST ---------
-        st.subheader("✂️ Pembagian Train dan Test")
-
-        test_size = 0.2
-        n_total = len(df_musim)
-        n_test = int(n_total * test_size)
-        n_train = n_total - n_test
-
-        df_train = df_musim.iloc[:n_train]
-        df_test = df_musim.iloc[n_train:]
-
-        st.write(f"Jumlah total data   : {n_total}")
-        st.write(f"Jumlah data training: {df_train.shape[0]}")
-        st.write(f"Jumlah data testing : {df_test.shape[0]}")
-
-        # --------- NORMALISASI ---------
-        st.subheader("📏 Normalisasi Data")
-        scaler = MinMaxScaler()
-        scaled_values = scaler.fit_transform(df_musim['FF_X'].values.reshape(-1, 1))
-        st.success("✅ Normalisasi selesai menggunakan MinMaxScaler.")
-
-        # --------- VISUALISASI PEMBAGIAN ---------
-        st.subheader("📊 Visualisasi Pembagian Data Train-Test")
-        fig, ax = plt.subplots(figsize=(20, 6))
-        ax.plot(df_train.index, df_train['FF_X'], label='Training', color='royalblue')
-        ax.plot(df_test.index, df_test['FF_X'], label='Testing', color='darkorange')
-        ax.axvline(x=df_test.index[0], color='red', linestyle='--', label='Split Point')
-        ax.set_title('Visualisasi Pembagian Data Train dan Test - Variabel FF_X')
-        ax.set_xlabel('Tanggal')
-        ax.set_ylabel('Kecepatan Angin (FF_X)')
+    # --- Visualisasi ---
+    features = ['FF_X']
+    for feature in features:
+        fig, ax = plt.subplots(figsize=(22, 6))
+        ax.plot(df_train.index, df_train[feature], label='Training', color='blue')
+        ax.plot(df_test.index, df_test[feature], label='Testing', color='orange')
+        ax.set_title(f'Pembagian Data Train dan Test pada Variabel {feature}')
         ax.legend()
-        ax.grid(True)
         st.pyplot(fig)
 
-        st.markdown("""
-**Penjelasan Visualisasi:**
-- Warna biru mewakili data pelatihan (training set)
-- Warna oranye menunjukkan data pengujian (testing set)
-- Garis merah vertikal adalah titik pemisah antara data latih dan uji berdasarkan waktu
+    st.success("✅ Data telah dinormalisasi dan dibagi menjadi train/test.")
+    # === Fungsi Transformasi Supervised ===
+    def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+        df = pd.DataFrame(data)
+        n_vars = df.shape[1]
+        cols, names = [], []
 
-📌 Karena ini adalah data deret waktu (time series), maka pembagian dilakukan berdasarkan urutan waktu, bukan secara acak.
-""")
+        for i in range(n_in, 0, -1):
+            cols.append(df.shift(i))
+            names += [f'var{j+1}(t-{i})' for j in range(n_vars)]
+
+        for i in range(0, n_out):
+            cols.append(df.shift(-i))
+            if i == 0:
+                names += [f'var{j+1}(t)' for j in range(n_vars)]
+            else:
+                names += [f'var{j+1}(t+{i})' for j in range(n_vars)]
+
+        agg = pd.concat(cols, axis=1)
+        agg.columns = names
+
+        if dropnan:
+            agg.dropna(inplace=True)
+        return agg
+
+    # === Normalisasi ulang FF_X jika belum disimpan ===
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaled = scaler.fit_transform(df_train[['FF_X']])
+    st.session_state['scaler'] = scaler
+
+    # === Parameter Lag ===
+    n_days = st.slider("⏳ Jumlah Hari Input (Lag)", min_value=1, max_value=30, value=6)
+    n_features = st.session_state.get("n_features", 1)
+
+    st.session_state['n_days'] = n_days
+    st.session_state['n_features'] = n_features
+
+    # === Transformasi ke Supervised Format ===
+    reframed = series_to_supervised(scaled, n_in=n_days, n_out=1)
+    st.session_state['reframed'] = reframed
+
+    st.success(f"✅ Data berhasil diubah ke format supervised dengan {n_days} lag hari.")
+    st.subheader("📄 Contoh Data Supervised")
+    st.dataframe(reframed.head(10))
+
+    # === Splitting Train-Test ===
+    st.subheader("✂️ Pembagian Data Train dan Test")
+    values = reframed.values
+    train, test = train_test_split(values, test_size=0.2, shuffle=False)
+
+    # Ambil indeks tanggal sesuai reframed
+    date_reframed = df_train.index[reframed.index]
+    date_train = date_reframed[:len(train)]
+    date_test = date_reframed[len(train):]
+
+    n_obs = n_days * n_features
+    train_X, train_y = train[:, :n_obs], train[:, -n_features:]
+    test_X, test_y = test[:, :n_obs], test[:, -n_features:]
+
+    # Reshape ke 3D
+    X_train = train_X.reshape((train_X.shape[0], n_days, n_features))
+    X_test = test_X.reshape((test_X.shape[0], n_days, n_features))
+
+    # Simpan ke session state
+    st.session_state['X_train'] = X_train
+    st.session_state['X_test'] = X_test
+    st.session_state['y_train'] = train_y
+    st.session_state['y_test'] = test_y
+    st.session_state['date_train'] = date_train
+    st.session_state['date_test'] = date_test
+
+    st.success("✅ Data berhasil dibagi ke bentuk input-output LSTM.")
+
+    # === Ringkasan Dimensi ===
+    st.markdown("**🧾 Ringkasan Dimensi Data:**")
+    st.write("Total features:", n_features)
+    st.write("X_train:", X_train.shape)
+    st.write("X_test:", X_test.shape)
+    st.write("y_train:", train_y.shape)
+    st.write("y_test:", test_y.shape)
+
+    # === Visualisasi Contoh Data ===
+    st.subheader("🔍 Contoh Data Input dan Output")
+
+    with st.expander("📌 Contoh struktur input X_train[0]"):
+        st.write(X_train[0])
+
+    with st.expander("📌 Contoh target y_train[0]"):
+        st.write(train_y[0])
+
+    # === Tanggal Train-Test ===
+    st.subheader("🗓️ Tanggal Data Train dan Test")
+    st.write("Tanggal train:", date_train.min(), "→", date_train.max())
+    st.write("Tanggal test:", date_test.min(), "→", date_test.max())
+        # === Tombol ke tahap berikutnya ===
+    if st.button("➡️ Lanjut ke Hyperparameter Tuning (TCN)"):
+        st.session_state["menu"] = "Hyperparameter Tuning (TCN)"
+        st.rerun()
+    
+if menu == "Hyperparameter Tuning (TCN)":
+    st.title("🎯 Hyperparameter Tuning dengan Optuna (TCN)")
+
+    if 'X_train' not in st.session_state or 'y_train' not in st.session_state:
+        st.warning("🚨 Data belum diproses! Silakan lakukan preprocessing, transformasi supervised, dan splitting terlebih dahulu.")
     else:
-        st.warning("❗ Silakan upload file terlebih dahulu.")
-# ========== MODELING ==========
-elif menu == "🧠 Modeling (LSTM / TCN / RBFNN)":
-    st.title("🧠 Transformasi Supervised Learning (Lag Feature)")
-    st.session_state['y_pred'] = y_pred
-    st.session_state['y_test'] = y_test
-    st.session_state['model'] = model
+        X_train = st.session_state.X_train
+        y_train = st.session_state.y_train
+        X_test = st.session_state.X_test
+        y_test = st.session_state.y_test
+        n_features = st.session_state.n_features
+        df_train = st.session_state['df_train']
+        df_test = st.session_state['df_test']
 
+        n_trials = st.number_input("🔁 Jumlah Percobaan (Trials)", min_value=10, max_value=100, value=50, step=10)
 
-    if 'df_musim' in st.session_state:
-        df_musim = st.session_state.df_musim
+        def objective(trial):
+            nb_filters = trial.suggest_int('filters', 16, 128)
+            kernel_size = trial.suggest_int('kernel_size', 2, 6)
+            dilations_level = trial.suggest_int('dilations_level', 2, 5)
+            dilations = [2 ** i for i in range(dilations_level)]
+            dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5)
+            dense_units = trial.suggest_int('dense_units', 10, 200)
+            learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+            epochs = trial.suggest_int('epochs', 20, 100)
+            batch_size = trial.suggest_int('batch_size', 16, 128)
 
-        # Menampilkan nilai min dan max
-        st.subheader("📏 Statistik Kolom FF_X")
-        min_val = df_musim['FF_X'].min()
-        max_val = df_musim['FF_X'].max()
-        st.write(f"**Nilai Minimum FF_X:** {min_val}")
-        st.write(f"**Nilai Maksimum FF_X:** {max_val}")
+            model = Sequential()
+            model.add(TCN(
+                nb_filters=nb_filters,
+                kernel_size=kernel_size,
+                dilations=dilations,
+                dropout_rate=dropout_rate,
+                return_sequences=False,
+                input_shape=(X_train.shape[1], X_train.shape[2])
+            ))
+            model.add(Dropout(dropout_rate))
+            model.add(Dense(dense_units, activation='relu'))
+            model.add(Dense(n_features))
 
-        # Normalisasi
-        scaler = MinMaxScaler(feature_range=(0, 1))
-        scaled = scaler.fit_transform(df_musim[['FF_X']])
-        st.success("✅ Data telah dinormalisasi menggunakan MinMaxScaler.")
+            optimizer = Adam(learning_rate=learning_rate)
+            model.compile(optimizer=optimizer, loss='mean_squared_error')
 
-        # Fungsi konversi ke supervised
-        def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
-            df = pd.DataFrame(data)
-            n_vars = df.shape[1]
-            cols, names = [], []
-            for i in range(n_in, 0, -1):
-                cols.append(df.shift(i))
-                names += [f'var{j+1}(t-{i})' for j in range(n_vars)]
-            for i in range(0, n_out):
-                cols.append(df.shift(-i))
-                if i == 0:
-                    names += [f'var{j+1}(t)' for j in range(n_vars)]
-                else:
-                    names += [f'var{j+1}(t+{i})' for j in range(n_vars)]
-            agg = pd.concat(cols, axis=1)
-            agg.columns = names
-            if dropnan:
-                agg.dropna(inplace=True)
-            return agg
+            early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
-        # Input lag dari user
-        n_days = st.slider("🔢 Pilih jumlah lag (hari)", 1, 30, 6)
-        n_features = 1
+            model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
+                      validation_data=(X_test, y_test),
+                      callbacks=[early_stopping], verbose=0, shuffle=False)
 
-        reframed = series_to_supervised(scaled, n_days, 1)
+            loss = model.evaluate(X_test, y_test, verbose=0)
+            return loss
 
-        st.subheader("🧾 Data Setelah Diubah ke Supervised Format")
-        st.write(f"Shape: {reframed.shape}")
-        st.dataframe(reframed.head(10))
+        if st.button("🚀 Jalankan Tuning"):
+            with st.spinner("🔍 Mencari kombinasi hyperparameter terbaik..."):
+                study = optuna.create_study(direction='minimize')
+                study.optimize(objective, n_trials=n_trials)
 
-        # Simpan ke session state jika ingin digunakan selanjutnya
-        st.session_state.reframed = reframed
-    else:
-        st.warning("❗ Silakan lakukan preprocessing terlebih dahulu di menu '⚙️ Preprocessing'.")
-        # ------------------------- TRAIN TEST SPLIT -------------------------
-        st.subheader("🧪 Split Data untuk LSTM")
-        if st.button("Train Model"):
-            model.fit(train_X, train_y, epochs=50, batch_size=32, verbose=0)
-            y_pred = model.predict(test_X)
-            y_pred_inv = scaler_y.inverse_transform(y_pred)
-            y_test_inv = scaler_y.inverse_transform(test_y)
-        
-            st.success("Model telah dilatih dan diprediksi.")
-        
-            # Tambahkan ini
-            st.session_state['y_pred'] = y_pred_inv
-            st.session_state['y_test'] = y_test_inv
-            st.session_state['model'] = model
+                st.success("🎯 Tuning selesai!")
+                st.write("Best loss:", study.best_value)
+                st.json(study.best_params)
 
+                # Simpan ke session state
+                st.session_state.best_params_tcn = study.best_params
+                best_params = study.best_params
+                dilations = [2 ** i for i in range(best_params['dilations_level'])]
 
-        # Ambil nilai array dari dataframe hasil reframing
-        values = reframed.values
+                # Final Model
+                final_model = Sequential()
+                final_model.add(TCN(
+                    nb_filters=best_params['filters'],
+                    kernel_size=best_params['kernel_size'],
+                    dilations=dilations,
+                    dropout_rate=best_params['dropout_rate'],
+                    return_sequences=False,
+                    input_shape=(X_train.shape[1], X_train.shape[2])
+                ))
+                final_model.add(Dropout(best_params['dropout_rate']))
+                final_model.add(Dense(best_params['dense_units'], activation='relu'))
+                final_model.add(Dense(n_features))
 
-        # Simpan index tanggal dari hasil reframing
-        date_reframed = df_musim.index[reframed.index]
+                optimizer = Adam(learning_rate=best_params['learning_rate'])
+                final_model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
 
-        # Split manual (tanpa shuffle)
-        train_size = int(len(values) * 0.8)
-        train, test = values[:train_size], values[train_size:]
+                early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
-        # Bagi juga tanggal
-        date_train = date_reframed[:len(train)]
-        date_test = date_reframed[len(train):]
+                history = final_model.fit(X_train, y_train,
+                                          epochs=best_params['epochs'],
+                                          batch_size=best_params['batch_size'],
+                                          validation_data=(X_test, y_test),
+                                          callbacks=[early_stopping],
+                                          verbose=0, shuffle=False)
 
-        st.write(f"Jumlah data: {len(values)}")
-        st.write(f"Jumlah train: {len(train)} ({date_train.min().date()} s.d. {date_train.max().date()})")
-        st.write(f"Jumlah test : {len(test)} ({date_test.min().date()} s.d. {date_test.max().date()})")
+                test_loss, test_mae = final_model.evaluate(X_test, y_test, verbose=0)
+                st.success(f"✅ **Test Loss:** {test_loss:.4f} | **Test MAE:** {test_mae:.4f}")
 
-        # ------------------------- PISAHKAN X dan y -------------------------
-        n_obs = n_days * n_features
-        train_X, train_y = train[:, :n_obs], train[:, -1]
-        test_X, test_y = test[:, :n_obs], test[:, -1]
+                # Simpan model ke session_state
+                st.session_state['tcn_model'] = final_model
 
-        # Reshape untuk LSTM
-        X_train = train_X.reshape((train_X.shape[0], n_days, n_features))
-        X_test = test_X.reshape((test_X.shape[0], n_days, n_features))
-        y_train = train_y.reshape(-1, 1)
-        y_test = test_y.reshape(-1, 1)
-
-        st.write("📐 Shape X_train:", X_train.shape)
-        st.write("📐 Shape y_train:", y_train.shape)
-        st.write("📐 Shape X_test :", X_test.shape)
-        st.write("📐 Shape y_test :", y_test.shape)
-
-        # ------------------------- MODEL LSTM -------------------------
-        st.title("🧠 Modeling - LSTM untuk Prediksi Kecepatan Angin")
-        
-        # Pastikan variabel tersedia di session_state
-        required_vars = ['X_train', 'X_test', 'y_train', 'y_test', 'n_features']
-        if not all(k in st.session_state for k in required_vars):
-            st.warning("❗ Pastikan Anda sudah melakukan preprocessing dan pembentukan dataset.")
-        else:
-            X_train = st.session_state.X_train
-            X_test = st.session_state.X_test
-            y_train = st.session_state.y_train
-            y_test = st.session_state.y_test
-            n_features = st.session_state.n_features
-        
-            def train_model(model, X_train, y_train, X_test, y_test,
-                            learning_rate=0.001, batch_size=32, epochs=100,
-                            patience=3, filepath='best_model.h5'):
-        
-                def scheduler(epoch, lr):
-                    if epoch < 10:
-                        return lr
-                    else:
-                        return float(lr * tf.math.exp(-0.1 * (epoch - 9)))
-        
-                lr_scheduler = LearningRateScheduler(scheduler)
-                early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
-                checkpointer = ModelCheckpoint(filepath=filepath, verbose=1, save_best_only=True)
-        
-                with st.spinner("⏳ Model sedang dilatih..."):
-                    history = model.fit(X_train, y_train, epochs=epochs,
-                                        batch_size=batch_size, validation_data=(X_test, y_test),
-                                        callbacks=[lr_scheduler, early_stopping, checkpointer],
-                                        verbose=0, shuffle=False)
-        
-                st.success("✅ Training selesai!")
-                loss, mae = model.evaluate(X_test, y_test, verbose=0)
-                st.metric("MSE (Test Loss)", f"{loss:.5f}")
-                st.metric("MAE (Test MAE)", f"{mae:.5f}")
-        
+                # Plot loss
+                st.subheader("📉 Grafik Loss Training vs Validation")
                 fig, ax = plt.subplots()
                 ax.plot(history.history['loss'], label='Training Loss')
                 ax.plot(history.history['val_loss'], label='Validation Loss')
-                ax.set_xlabel('Epoch')
+                ax.set_xlabel('Epochs')
                 ax.set_ylabel('Loss')
-                ax.set_title('Training History')
+                ax.set_title('Training vs Validation Loss')
                 ax.legend()
                 st.pyplot(fig)
-        
-                return history, loss
-        
-            st.subheader("📌 Model 1: LSTM + Flatten + Dense")
-            if st.button("🚀 Latih Model 1"):
-                model1 = Sequential()
-                model1.add(LSTM(50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-                model1.add(Dropout(0.3))
-                model1.add(LSTM(10, return_sequences=False))
-                model1.add(Dropout(0.3))
-                model1.add(Flatten())
-                model1.add(Dense(64, activation="relu"))
-                model1.add(Dense(16, activation="relu"))
-                model1.add(Dense(n_features))
-        
-                model1.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
-                history1, loss1 = train_model(model1, X_train, y_train, X_test, y_test)
-                st.session_state.model1 = model1
-        
-            st.subheader("📌 Model 2: LSTM Deep")
-            if st.button("🚀 Latih Model 2"):
-                model2 = Sequential()
-                model2.add(LSTM(200, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-                model2.add(Dropout(0.1))
-                model2.add(LSTM(100, return_sequences=False))
-                model2.add(Dropout(0.1))
-                model2.add(Dense(64, activation="relu"))
-                model2.add(Dense(n_features))
-        
-                model2.compile(optimizer=Adam(learning_rate=0.0001), loss='mse', metrics=['mae'])
-                history2, loss2 = train_model(model2, X_train, y_train, X_test, y_test)
-                st.session_state.model2 = model2
-# Pastikan variabel hasil modeling sudah tersedia
-    if 'y_test_inv' not in st.session_state or 'y_pred_inv' not in st.session_state:
-        st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
-    else:
-        y_test_inv = st.session_state.y_test_inv
-        y_pred_inv = st.session_state.y_pred_inv
-        features = st.session_state.features
 
-    st.title("📈 Hasil Prediksi dan Evaluasi")
+                # ---------------- INVERSE TRANSFORM & PREDIKSI ---------------- #
 
-    # Plot untuk masing-masing fitur
-    for i in range(len(features)):
-        fig, ax = plt.subplots(figsize=(20, 6))
-        ax.plot(y_test_inv[:, i], label='Actual')
-        ax.plot(y_pred_inv[:, i], label='Predicted')
-        ax.set_title(f"Actual vs Predicted - {features[i]}")
-        ax.set_xlabel("Time")
-        ax.set_ylabel(features[i])
-        ax.legend()
-        st.pyplot(fig)
+                def inverse_transform_and_plot_tcn(y_true, y_pred, scaler, feature_name='FF_X'):
+                    inv_true = scaler.inverse_transform(y_true)
+                    inv_pred = scaler.inverse_transform(y_pred)
 
-    # Membuat DataFrame hasil prediksi
-    def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
-        y_true_flat = y_true.flatten()
-        y_pred_flat = np.round(y_pred.flatten(), 3)
-        df_final = pd.DataFrame({
-            f'{feature_name}': y_true_flat,
-            f'{feature_name}_pred': y_pred_flat
-        })
-        return df_final
+                    st.subheader(f"📊 Actual vs Predicted - {feature_name}")
+                    fig, ax = plt.subplots(figsize=(14, 5))
+                    ax.plot(inv_true, label='Actual')
+                    ax.plot(inv_pred, label='Predicted')
+                    ax.set_title(f'Actual vs Predicted: {feature_name}')
+                    ax.set_xlabel('Time')
+                    ax.set_ylabel(feature_name)
+                    ax.legend()
+                    ax.grid(True)
+                    st.pyplot(fig)
 
-    df_pred = create_predictions_dataframe(y_test_inv, y_pred_inv, features[0])
-    st.subheader("🧾 Contoh Tabel Prediksi")
-    st.dataframe(df_pred.head(10))
+                    return inv_true, inv_pred
 
-    # Fungsi evaluasi
-    def calculate_metrics(y_true, y_pred, feature_name='FF_X'):
-        y_true = y_true.flatten()
-        y_pred = y_pred.flatten()
+                # --- Buat DataFrame Prediksi vs Aktual ---
+                def create_predictions_dataframe_tcn(y_true, y_pred, feature_name='Target'):
+                    y_true_flat = y_true.flatten()
+                    y_pred_flat = np.round(y_pred.flatten(), 3)
 
-        mae = mean_absolute_error(y_true, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-        r2 = r2_score(y_true, y_pred)
+                    df = pd.DataFrame({
+                        f'{feature_name}': y_true_flat,
+                        f'{feature_name}_pred': y_pred_flat
+                    })
+                    return df
 
-        mask = y_true != 0
-        if np.any(mask):
-            mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
-        else:
-            mape = np.nan
+                def calculate_metrics_tcn(y_true, y_pred, feature_name='FF_X'):
+                    y_true = y_true.flatten()
+                    y_pred = y_pred.flatten()
 
-        metrics = {
-            'feature': [feature_name],
-            'MAE': [mae],
-            'RMSE': [rmse],
-            'R2': [r2],
-            'MAPE': [mape]
-        }
-        return pd.DataFrame(metrics)
+                    mae = mean_absolute_error(y_true, y_pred)
+                    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+                    r2 = r2_score(y_true, y_pred)
 
-    # Tampilkan metrik evaluasi
-    st.subheader("📊 Evaluasi Akurasi Model")
-    df_metrics = calculate_metrics(y_test_inv, y_pred_inv, features[0])
-    st.dataframe(df_metrics)
+                    mask = y_true != 0
+                    if np.any(mask):
+                        mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+                    else:
+                        mape = np.nan
+
+                    metrics = {
+                        'Feature': [feature_name],
+                        'MAE': [mae],
+                        'RMSE': [rmse],
+                        'R2': [r2],
+                        'MAPE': [mape]
+                    }
+
+                    return pd.DataFrame(metrics)
+
+                
+                # Ambil variabel dari session state
+                final_model = st .session_state['tcn_model']
+                X_test = st.session_state['X_test']
+                y_test = st.session_state['y_test']
+                scaler = st.session_state['scaler']
+                # 1. Prediksi
+                y_pred_tcn = final_model.predict(X_test)
+
+                # 2. Nama fitur target
+                features = ['FF_X']  # sesuaikan jika berbeda
+                st.session_state.features = ['FF_X']
+
+                # 3. Inverse transform dan visualisasi
+                y_test_inv, y_pred_inv = inverse_transform_and_plot_tcn(y_test, y_pred_tcn, scaler, features)
+                st.session_state.y_test_inv = y_test_inv
+                st.session_state.y_pred_inv = y_pred_inv
+
+                # 4. Tabel hasil prediksi
+                st.subheader("🧾 Tabel Hasil Prediksi (Model TCN)")
+                preds_df = create_predictions_dataframe_tcn(y_test_inv, y_pred_inv, feature_name=features[0])
+                st.dataframe(preds_df.head())
+
+                # 5. Evaluasi metrik
+                st.subheader("📊 Evaluasi Akurasi (Model TCN)")
+                metrics_df = calculate_metrics_tcn(y_test_inv, y_pred_inv, feature_name=features[0])
+                st.dataframe(metrics_df)
+                st.session_state.preds_df = preds_df
+                st.session_state.metrics_df = metrics_df
+                model = st.session_state['tcn_model']
+                scaler = st.session_state['scaler']
+                X_test = st.session_state['X_test']
+                df_musim = st.session_state['df_musim']
+                df_train = st.session_state['df_train']
+                df_test = st.session_state['df_test']
+
+                # --- Parameter ---
+                n_days = st.session_state['n_days']
+                n_features = st.session_state['n_features']
+                n_forecast_days = 30
+
+                # --- Ambil sequence terakhir dari data test ---
+                last_sequence = X_test[-1].reshape(1, n_days, n_features)
+
+                # --- Prediksi iteratif 30 hari ---
+                forecast = []
+                current_seq = last_sequence
+                for _ in range(n_forecast_days):
+                    pred = model.predict(current_seq, verbose=0)
+                    forecast.append(pred[0])
+
+                    # Update sequence autoregresif
+                    new_seq = np.append(current_seq[:, 1:, :], pred.reshape(1, 1, n_features), axis=1)
+                    current_seq = new_seq
+
+                # --- Inverse transform hasil prediksi ---
+                forecast_array = np.array(forecast)
+                forecast_inverse = scaler.inverse_transform(forecast_array)
+                forecast_inverse = np.abs(forecast_inverse)
+
+                # --- Buat dataframe hasil prediksi ---
+                date_range = pd.date_range(start=df_musim.index[-1] + pd.Timedelta(days=1), periods=n_forecast_days)
+                forecast_df = pd.DataFrame(forecast_inverse, index=date_range, columns=['FF_X'])
+                st.session_state['forecast_df'] = forecast_df
+
+                # --- Plot hasil peramalan ---
+                feature = 'FF_X'
+                fig = make_subplots(rows=1, cols=1, shared_xaxes=True)
+
+                fig.add_trace(go.Scatter(
+                    x=df_train.index,
+                    y=df_train[feature],
+                    mode='lines',
+                    name='Data Training',
+                    line=dict(color='green')
+                ), row=1, col=1)
+
+                fig.add_trace(go.Scatter(
+                    x=df_test.index,
+                    y=df_test[feature],
+                    mode='lines',
+                    name='Data Test',
+                    line=dict(color='orange')
+                ), row=1, col=1)
+
+                fig.add_trace(go.Scatter(
+                    x=forecast_df.index,
+                    y=forecast_df[feature],
+                    mode='lines',
+                    name='Peramalan TCN',
+                    line=dict(color='blue')
+                ), row=1, col=1)
+
+                if not df_train.empty and not df_test.empty:
+                    fig.add_trace(go.Scatter(
+                        x=[df_train.index[-1], df_test.index[0]],
+                        y=[df_train[feature].iloc[-1], df_test[feature].iloc[0]],
+                        mode='lines',
+                        line=dict(color='orange'),
+                        showlegend=False
+                    ), row=1, col=1)
+
+                if not df_test.empty and not forecast_df.empty:
+                    fig.add_trace(go.Scatter(
+                        x=[df_test.index[-1], forecast_df.index[0]],
+                        y=[df_test[feature].iloc[-1], forecast_df[feature].iloc[0]],
+                        mode='lines',
+                        line=dict(color='blue'),
+                        showlegend=False
+                    ), row=1, col=1)
+
+                fig.update_layout(
+                    title=f'Peramalan {feature} Menggunakan TCN untuk {n_forecast_days} Hari ke Depan',
+                    yaxis_title=feature,
+                    width=1100,
+                    height=500,
+                    margin=dict(l=50, r=30, t=60, b=40),
+                    legend=dict(orientation="h", y=1.12, x=0.01)
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # --- Tabel hasil ---
+                st.subheader("🧾 Tabel Hasil Prediksi 30 Hari")
+                st.dataframe(forecast_df)
+                                # === Tombol ke tahap berikutnya ===
+                if st.button("➡️ Evaluasi Model"):
+                    st.session_state["menu"] = "Evaluasi Model"
+                    st.rerun()
+
+      
+if menu == "Evaluasi Model":
+    st.title("📊 Evaluasi & Peramalan Model TCN")
+    # Fungsi untuk ubah ke supervised
+    def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+        df = pd.DataFrame(data)
+        cols, names = [], []
+        for i in range(n_in, 0, -1):
+            cols.append(df.shift(i))
+            names += [f'var(t-{i})']
+        for i in range(n_out):
+            cols.append(df.shift(-i))
+            names += ['var(t)'] if i == 0 else [f'var(t+{i})']
+        agg = pd.concat(cols, axis=1)
+        agg.columns = names
+        if dropnan:
+            agg.dropna(inplace=True)
+        return agg
     
-if menu == "📈 Prediction":
-    st.title("📈 Halaman Prediksi")
+    # Judul
+    st.subheader("📦 Prediksi & Visualisasi Kecepatan Angin (Upload Model tcn Saja)")
+    
+    # --- Cek apakah df_musim sudah ada ---
+    if 'df_musim' not in st.session_state or 'df_train' not in st.session_state or 'df_test' not in st.session_state:
+        st.warning("Silakan lakukan preprocessing dan pembagian data terlebih dahulu.")
+        st.stop()
 
-    # Pastikan semua komponen tersedia
-    required_keys = ['tuned_model', 'X_test', 'y_test', 'scaler', 'features']
-    if all(k in st.session_state for k in required_keys):
-        model = st.session_state.tuned_model
-        X_test = st.session_state.X_test
-        y_test = st.session_state.y_test
-        scaler = st.session_state.scaler
-        features = st.session_state.features
+    df_musim = st.session_state['df_musim']
+    df_train = st.session_state['df_train']
+    df_test = st.session_state['df_test']
 
-        # Prediksi
-        y_pred = model.predict(X_test)
+    # --- Upload model ---
+    st.subheader("📥 Upload Model TCN (.h5)")
+    uploaded_model = st.file_uploader("Upload file model TCN (.h5)", type=["h5"])
 
-        # Inverse Transform
-        inv_pred = scaler.inverse_transform(y_pred)
-        inv_true = scaler.inverse_transform(y_test)
+    if uploaded_model is None:
+        st.info("Silakan upload model TCN terlebih dahulu.")
+        st.stop()
 
-        # Visualisasi Prediksi vs Aktual
-        for i in range(len(features)):
-            fig, ax = plt.subplots(figsize=(20, 6))
-            ax.plot(inv_true[:, i], label='Aktual')
-            ax.plot(inv_pred[:, i], label='Prediksi')
-            ax.set_title(f'📉 Prediksi vs Aktual untuk {features[i]}')
-            ax.set_xlabel('Time')
-            ax.set_ylabel(features[i])
-            ax.legend()
-            st.pyplot(fig)
+    # --- Simpan model sementara ---
+    model_path = "temp_uploaded_model.h5"
+    with open(model_path, "wb") as f:
+        f.write(uploaded_model.read())
 
-        # Tabel Prediksi
-        def create_predictions_dataframe(y_true, y_pred, feature_name='FF_X'):
-            y_true_flat = y_true.flatten()
-            y_pred_flat = np.round(y_pred.flatten(), 3)
-            return pd.DataFrame({f'{feature_name}': y_true_flat,
-                                 f'{feature_name}_pred': y_pred_flat})
+    try:
+        loaded_model = load_model(model_path, compile=False)
+    except Exception as e:
+        st.error(f"Gagal memuat model: {e}")
+        st.stop()
 
-        df_pred = create_predictions_dataframe(inv_true, inv_pred, feature_name=features[0])
-        st.subheader("🧾 Tabel Prediksi")
-        st.dataframe(df_pred.head(30))
+    # --- Data uji ---
+    test_data = df_musim[['FF_X']].values.astype('float32')
 
-        # Evaluasi Metrik
-        def calculate_metrics(y_true, y_pred, feature_name='FF_X'):
-            y_true = y_true.flatten()
-            y_pred = y_pred.flatten()
-            mae = mean_absolute_error(y_true, y_pred)
-            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-            r2 = r2_score(y_true, y_pred)
-            mask = y_true != 0
-            mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100 if np.any(mask) else np.nan
-            return pd.DataFrame({
-                'Feature': [feature_name],
-                'MAE': [round(mae, 3)],
-                'RMSE': [round(rmse, 3)],
-                'R2 Score': [round(r2, 3)],
-                'MAPE (%)': [round(mape, 2)]
-            })
+    # --- Scaling ---
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    test_data_scaled = scaler.fit_transform(test_data)
 
-        st.subheader("📊 Evaluasi Akurasi Model")
-        df_metrics = calculate_metrics(inv_true, inv_pred, features[0])
-        st.dataframe(df_metrics)
+    # --- Parameter ---
+    n_days = 6
+    n_features = test_data.shape[1]
+    n_forecast_days = 30
 
-    else:
-        st.warning("❗ Harap jalankan pelatihan dan prediksi model terlebih dahulu.")
+    # --- Supervised Transform ---
+    test_data_supervised = series_to_supervised(test_data_scaled, n_days, 1)
+    test_data_sequences = test_data_supervised.values[:, :n_days * n_features]
+
+    # --- Ambil sequence terakhir untuk prediksi iteratif ---
+    last_sequence = test_data_sequences[-1].reshape((1, n_days, n_features))
+
+    # --- Prediksi iteratif 30 hari ---
+    forecast = []
+    for _ in range(n_forecast_days):
+        predicted = loaded_model.predict(last_sequence)
+        forecast.append(predicted[0])
+
+        predicted_reshaped = predicted.reshape((1, 1, n_features))
+        last_sequence = np.append(last_sequence[:, 1:, :], predicted_reshaped, axis=1)
+
+    # --- Inverse transform hasil prediksi ---
+    forecast_array = np.array(forecast)
+    forecast_inverse = scaler.inverse_transform(forecast_array)
+    forecast_inverse = np.abs(forecast_inverse)
+
+    # --- Buat dataframe hasil prediksi ---
+    date_range = pd.date_range(start=df_musim.index[-1], periods=n_forecast_days + 1)
+    forecast_df = pd.DataFrame(forecast_inverse, index=date_range[1:], columns=['FF_X'])
+
+    # --- Simpan hasil prediksi ke session_state (opsional) ---
+    st.session_state['forecast_df'] = forecast_df
+
+    # --- Plot Hasil ---
+    features = ['FF_X']
+
+    for feature in features:
+        fig = make_subplots(rows=1, cols=1, shared_xaxes=True)
+
+        fig.add_trace(go.Scatter(
+            x=df_train.index,
+            y=df_train[feature],
+            mode='lines',
+            name='Data Training',
+            line=dict(color='green')
+        ), row=1, col=1)
+
+        fig.add_trace(go.Scatter(
+            x=df_test.index,
+            y=df_test[feature],
+            mode='lines',
+            name='Data Test',
+            line=dict(color='orange')
+        ), row=1, col=1)
+
+        fig.add_trace(go.Scatter(
+            x=forecast_df.index,
+            y=forecast_df[feature],
+            mode='lines',
+            name='Peramalan TCN',
+            line=dict(color='blue')
+        ), row=1, col=1)
+
+        if not df_train.empty and not df_test.empty:
+            fig.add_trace(go.Scatter(
+                x=[df_train.index[-1], df_test.index[0]],
+                y=[df_train[feature].iloc[-1], df_test[feature].iloc[0]],
+                mode='lines',
+                line=dict(color='orange'),
+                showlegend=False
+            ), row=1, col=1)
+
+        if not df_test.empty and not forecast_df.empty:
+            fig.add_trace(go.Scatter(
+                x=[df_test.index[-1], forecast_df.index[0]],
+                y=[df_test[feature].iloc[-1], forecast_df[feature].iloc[0]],
+                mode='lines',
+                line=dict(color='blue'),
+                showlegend=False
+            ), row=1, col=1)
+
+        fig.update_layout(
+            title=f'Peramalan {feature} Menggunakan TCN untuk {n_forecast_days} Hari ke Depan',
+            yaxis_title=feature,
+            width=1100,
+            height=500,
+            margin=dict(l=50, r=30, t=60, b=40),
+            legend=dict(orientation="h", y=1.12, x=0.01)
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    # --- Tampilkan tabel hasil prediksi ---
+    st.subheader("Hasil Peramalan TCN 30 Hari")
+    st.dataframe(forecast_df)
+
