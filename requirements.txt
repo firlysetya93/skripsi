@@ -6,4 +6,4 @@ scikit-learn
 statsmodels
 openpyxl
 optuna
-tensorflow==2.15.0
+tensorflow-cpu==2.15.0
