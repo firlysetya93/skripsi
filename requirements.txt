@@ -1,4 +1,4 @@
-streamlit==1.35.0
+streamlit
 pandas
 numpy
 matplotlib
@@ -6,4 +6,4 @@ scikit-learn
 statsmodels
 openpyxl
 optuna
-tensorflow==2.16.0
+tensorflow==2.15.0
